@@ -78,7 +78,7 @@ def send_typing() -> None:
 
 def poll(offset: int | None, skip_before_ts: float | None) -> tuple[list[str], int | None]:
     """Long-poll Telegram. Geeft (nieuwe berichten van Ko, nieuwe offset) terug."""
-    chat_id = str(os.environ["TELEGRAM_CHAT_ID"])
+    chat_id = str(os.environ["TELEGRAM_CHAT_ID"]).strip()
     params = {"timeout": LONGPOLL_TIMEOUT}
     if offset is not None:
         params["offset"] = offset
@@ -98,7 +98,7 @@ def poll(offset: int | None, skip_before_ts: float | None) -> tuple[list[str], i
         msg = u.get("message") or u.get("edited_message")
         if not msg:
             continue
-        if str(msg.get("chat", {}).get("id")) != chat_id:
+        if str(msg.get("chat", {}).get("id")).strip() != chat_id:
             if DEBUG:
                 print(f"[debug] bericht overgeslagen: chat-id "
                       f"{msg.get('chat', {}).get('id')} != {chat_id}", file=sys.stderr)
