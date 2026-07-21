@@ -1,0 +1,36 @@
+name: Dagelijkse mail-digest
+
+on:
+  schedule:
+    # 07:30 Nederlandse tijd (05:30 UTC in de zomer).
+    - cron: "30 5 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installeer dependencies
+        run: pip install -r requirements.txt
+
+      - name: Draai digest
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GMAIL1_USER: ${{ secrets.GMAIL1_USER }}
+          GMAIL1_PASS: ${{ secrets.GMAIL1_PASS }}
+          GMAIL2_USER: ${{ secrets.GMAIL2_USER }}
+          GMAIL2_PASS: ${{ secrets.GMAIL2_PASS }}
+          HOSTNET_USER: ${{ secrets.HOSTNET_USER }}
+          HOSTNET_PASS: ${{ secrets.HOSTNET_PASS }}
+          HOSTNET_IMAP_HOST: ${{ secrets.HOSTNET_IMAP_HOST }}
+          HOSTNET_SMTP_HOST: ${{ secrets.HOSTNET_SMTP_HOST }}
+        run: python digest.py
