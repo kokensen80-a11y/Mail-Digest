@@ -51,7 +51,9 @@ def send_email(account: Account, to_addr: str, subject: str, body: str) -> None:
     msg["Subject"] = subject
     msg.set_content(body)
     ctx = ssl.create_default_context()
-    with smtplib.SMTP_SSL(account.smtp_host, account.smtp_port, context=ctx) as s:
+    # Timeout voorkomt dat de bot bevriest als de mailpoort geblokkeerd is.
+    with smtplib.SMTP_SSL(account.smtp_host, account.smtp_port,
+                          context=ctx, timeout=20) as s:
         s.login(account.user, account.password)
         s.send_message(msg)
 
