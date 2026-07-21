@@ -27,6 +27,7 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from zoneinfo import ZoneInfo
@@ -148,6 +149,31 @@ def calendar_delete(event_id: str) -> None:
     """Verwijder een afspraak uit de agenda op basis van het event-id."""
     _service("calendar", "v3").events().delete(
         calendarId="primary", eventId=event_id).execute()
+
+
+def calendar_add_meeting(summary: str, start_iso: str, end_iso: str,
+                         attendees: list[str], description: str = "") -> str:
+    """Plan een Google Meet-meeting: event met Meet-link + mail-uitnodigingen.
+
+    Geeft de Google Meet-link terug.
+    """
+    event = {
+        "summary": summary,
+        "description": description,
+        "start": {"dateTime": start_iso, "timeZone": TIMEZONE},
+        "end": {"dateTime": end_iso, "timeZone": TIMEZONE},
+        "attendees": [{"email": a} for a in attendees],
+        "conferenceData": {
+            "createRequest": {
+                "requestId": str(uuid.uuid4()),
+                "conferenceSolutionKey": {"type": "hangoutsMeet"},
+            }
+        },
+    }
+    ev = _service("calendar", "v3").events().insert(
+        calendarId="primary", body=event,
+        conferenceDataVersion=1, sendUpdates="all").execute()
+    return ev.get("hangoutLink", "")
 
 
 def calendar_events(time_min_iso: str, time_max_iso: str) -> list[dict]:
@@ -491,7 +517,10 @@ zonder die bevestiging, en nooit op eigen initiatief.
    c. Wil Ko de mail liever alleen als concept (niet versturen)? Gebruik dan \
 'concept_klaarzetten'.
 3. Ko's Google Agenda beheren:
-   - Afspraak toevoegen met 'agenda_afspraak_toevoegen'.
+   - Gewone afspraak toevoegen met 'agenda_afspraak_toevoegen'.
+   - Online meeting / videocall met anderen plannen met 'meeting_inplannen': dit maakt \
+een Google Meet-link én mailt de deelnemers een uitnodiging. Je hebt hun e-mailadressen \
+nodig — vraag ernaar als je ze niet hebt (kijk eerst in de mailcontext).
    - Afspraak verwijderen met 'agenda_afspraak_verwijderen' (gebruik het [id:...] uit het \
 agenda-overzicht hieronder). Als Ko zegt "haal de afspraak van morgen eruit", zoek de \
 betreffende afspraak in het overzicht en verwijder die.
@@ -545,6 +574,27 @@ CALENDAR_TOOL = {
             "location": {"type": "string"},
         },
         "required": ["summary", "start", "end"],
+    },
+}
+
+MEETING_TOOL = {
+    "name": "meeting_inplannen",
+    "description": "Plan een Google Meet-videomeeting: maakt een afspraak in Ko's "
+                   "agenda MET een Google Meet-link én mailt de deelnemers automatisch "
+                   "een uitnodiging. Gebruik dit als Ko een (online) meeting, videocall "
+                   "of gesprek wil plannen met een of meer andere mensen. Vraag naar de "
+                   "e-mailadressen van de deelnemers als je die niet hebt.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "summary": {"type": "string", "description": "Titel van de meeting."},
+            "start": {"type": "string", "description": "Starttijd, ISO-8601 met offset."},
+            "end": {"type": "string", "description": "Eindtijd, ISO-8601 met offset."},
+            "attendees": {"type": "array", "items": {"type": "string"},
+                          "description": "E-mailadressen van de deelnemers."},
+            "description": {"type": "string"},
+        },
+        "required": ["summary", "start", "end", "attendees"],
     },
 }
 
@@ -607,7 +657,7 @@ def handle(client: anthropic.Anthropic, history: list[dict], message: str,
         model=CLAUDE_MODEL,
         max_tokens=1500,
         system=_build_system(context, agenda, session_drafts),
-        tools=[DRAFT_TOOL, SEND_TOOL, CALENDAR_TOOL, DELETE_EVENT_TOOL],
+        tools=[DRAFT_TOOL, SEND_TOOL, CALENDAR_TOOL, MEETING_TOOL, DELETE_EVENT_TOOL],
         messages=messages,
     )
     reply = "".join(b.text for b in resp.content if b.type == "text").strip()
@@ -619,14 +669,16 @@ def handle(client: anthropic.Anthropic, history: list[dict], message: str,
     drafts = tool_inputs("concept_klaarzetten")
     sends = tool_inputs("mail_versturen")
     events = tool_inputs("agenda_afspraak_toevoegen")
+    meetings = tool_inputs("meeting_inplannen")
     deletes = tool_inputs("agenda_afspraak_verwijderen")
     if not reply:
         reply = ("Ik heb een concept voor je klaargezet." if drafts
                  else "Verstuurd, Ko." if sends
+                 else "Meeting ingepland, Ko." if meetings
                  else "In je agenda gezet, Ko." if events
                  else "Uit je agenda gehaald, Ko." if deletes else "Genoteerd, Ko.")
     return {"reply": reply, "drafts": drafts, "sends": sends,
-            "events": events, "deletes": deletes}
+            "events": events, "meetings": meetings, "deletes": deletes}
 
 
 def process(client, accounts_by_name, message: str, context: str, agenda: str,
@@ -677,6 +729,19 @@ def process(client, accounts_by_name, message: str, context: str, agenda: str,
         except Exception as e:
             print(f"Agenda toevoegen mislukt: {e}", file=sys.stderr)
             reply += f"\n\n⚠️ Het inplannen lukte niet ({e})."
+
+    # Google Meet-meetings inplannen (met uitnodigingen).
+    for m in result.get("meetings", []):
+        try:
+            link = calendar_add_meeting(
+                m.get("summary", "Meeting"), m["start"], m["end"],
+                m.get("attendees", []), m.get("description", ""))
+            wie = ", ".join(m.get("attendees", [])) or "de deelnemers"
+            reply += (f"\n\n🎥 Meeting ingepland en uitnodiging gestuurd naar {wie}."
+                      + (f"\nMeet-link: {link}" if link else ""))
+        except Exception as e:
+            print(f"Meeting inplannen mislukt: {e}", file=sys.stderr)
+            reply += f"\n\n⚠️ Het inplannen van de meeting lukte niet ({e})."
 
     # Afspraken verwijderen.
     for d in result.get("deletes", []):
