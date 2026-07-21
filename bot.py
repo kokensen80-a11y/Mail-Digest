@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 import threading
@@ -39,6 +40,11 @@ from digest import (
 
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")
 CONTEXT_LOOKBACK_HOURS = int(os.getenv("BOT_CONTEXT_HOURS", "120"))  # 5 dagen
+DB_PATH = os.getenv("TRUUS_DB",
+                    os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 "truus_memory.db"))
+HISTORY_LOAD = 40   # hoeveel eerdere berichten Truus als geheugen meeneemt
+ON_VPS = not os.getenv("GITHUB_REPOSITORY")  # op de VPS draait ze onbeperkt door
 CONTEXT_MAX_AGE_S = 180        # mailcontext maximaal 3 min hergebruiken
 MAX_CONTEXT_MAILS = 40
 LONGPOLL_TIMEOUT = 50          # seconden dat Telegram de verbinding openhoudt
@@ -75,6 +81,46 @@ def send_typing() -> None:
                             "action": "typing"}, timeout=10)
     except Exception as e:
         print(f"sendChatAction faalde: {e}", file=sys.stderr)
+
+
+# ---------------------------------------------------------------------------
+# Permanent geheugen (SQLite) — Truus onthoudt gesprekken over herstarts heen
+# ---------------------------------------------------------------------------
+
+def init_db() -> None:
+    con = sqlite3.connect(DB_PATH)
+    con.execute("""CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts TEXT NOT NULL,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL)""")
+    con.commit()
+    con.close()
+
+
+def load_history(limit: int = HISTORY_LOAD) -> list[dict]:
+    """Laad de laatste berichten als gespreksgeheugen (oud -> nieuw)."""
+    try:
+        con = sqlite3.connect(DB_PATH)
+        rows = con.execute(
+            "SELECT role, content FROM messages ORDER BY id DESC LIMIT ?",
+            (limit,)).fetchall()
+        con.close()
+    except Exception as e:
+        print(f"Geheugen laden faalde: {e}", file=sys.stderr)
+        return []
+    return [{"role": r, "content": c} for r, c in reversed(rows)]
+
+
+def save_turn(role: str, content: str) -> None:
+    try:
+        con = sqlite3.connect(DB_PATH)
+        con.execute("INSERT INTO messages (ts, role, content) VALUES (?, ?, ?)",
+                    (datetime.now(timezone.utc).isoformat(), role, content))
+        con.commit()
+        con.close()
+    except Exception as e:
+        print(f"Geheugen opslaan faalde: {e}", file=sys.stderr)
 
 
 def poll(offset: int | None, skip_before_ts: float | None) -> tuple[list[str], int | None]:
@@ -262,10 +308,12 @@ def process(client, accounts_by_name, message: str, context: str,
 
     send_telegram(reply)
 
-    # Gespreksgeheugen bijwerken (laatste ~24 berichten bewaren).
+    # Gespreksgeheugen bijwerken: in het werkgeheugen én permanent in de database.
     history.append({"role": "user", "content": message})
     history.append({"role": "assistant", "content": reply})
-    del history[:-24]
+    del history[:-HISTORY_LOAD]
+    save_turn("user", message)
+    save_turn("assistant", reply)
 
 
 # ---------------------------------------------------------------------------
@@ -314,15 +362,16 @@ def main() -> int:
 
     threading.Thread(target=refresh_context_loop, daemon=True).start()
 
+    init_db()
     start = time.time()
     offset: int | None = None
     skip_before = time.time() - STARTUP_SKIP_OLDER_S  # bij start oude appjes negeren
-    history: list[dict] = []          # gespreksgeheugen (deze sessie)
-    session_drafts: list[dict] = []   # concepten die deze sessie zijn klaargezet
+    history: list[dict] = load_history()   # permanent geheugen uit de database
+    session_drafts: list[dict] = []        # concepten die deze sessie zijn klaargezet
 
-    print(f"Truus luistert live... (debug={DEBUG}, budget={SESSION_BUDGET_S}s)",
-          file=sys.stderr)
-    while time.time() - start < SESSION_BUDGET_S:
+    print(f"Truus luistert live... (vps={ON_VPS}, debug={DEBUG}, "
+          f"geheugen={len(history)} berichten)", file=sys.stderr)
+    while ON_VPS or time.time() - start < SESSION_BUDGET_S:
         try:
             texts, offset = poll(offset, skip_before)
         except Exception as e:
