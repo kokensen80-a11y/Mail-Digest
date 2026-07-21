@@ -390,7 +390,7 @@ def _find_drafts_folder(imap: imaplib.IMAP4_SSL, preferred: str) -> str:
         names.append(name)
         if "\\Drafts" in line and special_drafts is None:
             special_drafts = name
-    if True:  # tijdelijke debug-logging
+    if os.getenv("DIGEST_DEBUG"):
         print(f"[debug] mailboxen gevonden: {names}", file=sys.stderr)
         print(f"[debug] special-use \\Drafts: {special_drafts}", file=sys.stderr)
     if special_drafts:
@@ -425,7 +425,7 @@ def save_draft(account: Account, to_addr: str, subject: str, body: str) -> None:
         status, resp = imap.append(folder, "(\\Draft)",
                                    imaplib.Time2Internaldate(datetime.now().timestamp()),
                                    msg.as_bytes())
-        if True:  # tijdelijke debug-logging
+        if os.getenv("DIGEST_DEBUG"):
             print(f"[debug] APPEND account={account.user} map='{folder}' "
                   f"status={status} resp={resp}", file=sys.stderr)
         if status != "OK":
@@ -477,7 +477,7 @@ def main() -> int:
 
     # Concept-antwoorden klaarzetten
     drafts = result.get("drafts", []) if CREATE_DRAFTS else []
-    if True:  # tijdelijke debug-logging
+    if os.getenv("DIGEST_DEBUG"):
         print(f"[debug] model gaf {len(drafts)} concept(en); accounts="
               f"{[d.get('account') for d in drafts]}", file=sys.stderr)
     by_name = {a.name: a for a in accounts}
@@ -505,18 +505,6 @@ def main() -> int:
         if failed:
             parts.append("⚠️ Niet gelukt om klaar te zetten: " + "; ".join(failed))
         send_telegram("\n".join(parts))
-
-    # --- TIJDELIJKE SELFTEST: bewijs dat schrijven naar Kodesaign werkt ---
-    test_acc = by_name.get("Kodesaign")
-    if test_acc:
-        try:
-            save_draft(test_acc, "test@voorbeeld.nl",
-                       "TEST — Truus conceptcheck (mag weg)",
-                       "Testconcept van Truus om te controleren of concepten in "
-                       "info@kodesaign.com belanden. Je mag dit gerust verwijderen.")
-            print("[debug] SELFTEST concept naar Kodesaign geschreven", file=sys.stderr)
-        except Exception as e:
-            print(f"[debug] SELFTEST MISLUKT: {e}", file=sys.stderr)
 
     return 0
 
