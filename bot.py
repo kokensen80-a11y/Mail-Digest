@@ -29,6 +29,7 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
+from zoneinfo import ZoneInfo
 
 import anthropic
 import requests
@@ -68,6 +69,7 @@ GOOGLE_TOKEN_FILE = os.getenv(
 GOOGLE_SCOPES = ["https://www.googleapis.com/auth/gmail.send",
                  "https://www.googleapis.com/auth/calendar"]
 TIMEZONE = os.getenv("TRUUS_TZ", "Europe/Amsterdam")
+LOCAL_TZ = ZoneInfo(TIMEZONE)  # altijd Amsterdamse tijd, niet de server-tijd (UTC)
 
 
 def google_enabled() -> bool:
@@ -207,7 +209,7 @@ def _fmt_event(e: dict) -> str:
     summary = e.get("summary", "(geen titel)")
     start = _event_start(e)
     if start:
-        return f"{start.astimezone().strftime('%a %d-%m %H:%M')} — {summary}"
+        return f"{start.astimezone(LOCAL_TZ).strftime('%a %d-%m %H:%M')} — {summary}"
     day = e.get("start", {}).get("date", "?")
     return f"{day} (hele dag) — {summary}"
 
@@ -234,14 +236,14 @@ def check_reminders() -> None:
     if not google_enabled():
         return
     now = datetime.now(timezone.utc)
-    local = now.astimezone()
+    local = now.astimezone(LOCAL_TZ)
     events = calendar_events(now.isoformat(), (now + timedelta(days=2)).isoformat())
 
     # Dagelijkse samenvatting: één keer per dag, na 08:00 lokale tijd.
     daily_key = f"daily:{local.date().isoformat()}"
     if 7 <= local.hour <= 10 and not reminder_already_sent(daily_key):
         todays = [e for e in events
-                  if (_event_start(e) or now).astimezone().date() == local.date()
+                  if (_event_start(e) or now).astimezone(LOCAL_TZ).date() == local.date()
                   and _event_start(e)]
         if todays:
             msg = "🗓️ *Goedemorgen Ko!* Je afspraken voor vandaag:\n" + \
@@ -260,7 +262,7 @@ def check_reminders() -> None:
         key = f"1h:{e.get('id')}"
         if 0 < mins <= 60 and not reminder_already_sent(key):
             send_telegram(f"⏰ Over ~{int(round(mins))} min: *{e.get('summary','afspraak')}* "
-                          f"om {start.astimezone().strftime('%H:%M')}.")
+                          f"om {start.astimezone(LOCAL_TZ).strftime('%H:%M')}.")
             mark_reminder_sent(key)
 
     # Verjaardagen: één week van tevoren (scan één keer per ochtend).
@@ -581,10 +583,11 @@ SEND_TOOL = {
 
 
 def _build_system(context: str, agenda: str, session_drafts: list[dict]) -> str:
-    now = datetime.now(timezone.utc).astimezone()
+    now = datetime.now(LOCAL_TZ)
     s = (SYSTEM_PROMPT
          + f"\n\nHuidige datum/tijd: {now.strftime('%A %d-%m-%Y %H:%M')} "
-         f"({TIMEZONE}). Gebruik dit voor 'morgen', 'volgende week', enz."
+         f"({TIMEZONE}, offset {now.strftime('%z')}). Reken afspraaktijden in DEZE "
+         f"tijdzone en gebruik deze offset in de ISO-tijden (bijv. ...T15:00:00{now.strftime('%z')[:3]}:00)."
          + "\n\n--- Je agenda (gebruik dit om 'ben ik druk?' te beantwoorden) ---\n"
          + agenda
          + "\n\n--- Recente mail als context ---\n" + context)
