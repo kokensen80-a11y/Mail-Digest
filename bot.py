@@ -20,23 +20,40 @@ from __future__ import annotations
 
 import json
 import os
+import smtplib
 import sqlite3
+import ssl
 import subprocess
 import sys
 import threading
 import time
 from datetime import datetime, timedelta, timezone
+from email.message import EmailMessage
 
 import anthropic
 import requests
 
 from digest import (
+    Account,
     Mail,
     fetch_recent,
     load_accounts,
     save_draft,
     send_telegram,
 )
+
+
+def send_email(account: Account, to_addr: str, subject: str, body: str) -> None:
+    """Verstuur een e-mail via SMTP vanuit het opgegeven account."""
+    msg = EmailMessage()
+    msg["From"] = account.user
+    msg["To"] = to_addr
+    msg["Subject"] = subject
+    msg.set_content(body)
+    ctx = ssl.create_default_context()
+    with smtplib.SMTP_SSL(account.smtp_host, account.smtp_port, context=ctx) as s:
+        s.login(account.user, account.password)
+        s.send_message(msg)
 
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")
 CONTEXT_LOOKBACK_HOURS = int(os.getenv("BOT_CONTEXT_HOURS", "120"))  # 5 dagen
@@ -205,9 +222,15 @@ gebruiken. Praat als een mens.
 
 Je kunt:
 1. Vragen beantwoorden of iets uitzoeken/samenvatten uit de mailcontext.
-2. Een concept-antwoord of nieuwe mail klaarzetten. Gebruik daarvoor de tool \
-'concept_klaarzetten'. Verstuur NOOIT zelf een mail — je zet alleen een concept klaar \
-en Ko verstuurt het met één tik. Vertel in je antwoord kort dat het concept klaarstaat.
+2. Mails opstellen en versturen. Werkwijze:
+   a. Als Ko een mail wil (laten) opstellen of beantwoorden, schrijf je de volledige \
+mail en toon je die IN JE ANTWOORD (afzender, aan, onderwerp, tekst), en vraag je: \
+"Zal ik 'm zo versturen?".
+   b. Pas NADAT Ko duidelijk bevestigt ("ja", "verstuur", "stuur maar", "akkoord") \
+roep je de tool 'mail_versturen' aan om de mail ECHT te versturen. Verstuur nooit \
+zonder die bevestiging, en nooit op eigen initiatief.
+   c. Wil Ko de mail liever alleen als concept (niet versturen)? Gebruik dan \
+'concept_klaarzetten'.
 3. Iets dat nog niet kan (bijv. een afspraak in de agenda zetten): leg vriendelijk uit \
 dat die koppeling nog niet actief is.
 
@@ -242,6 +265,26 @@ DRAFT_TOOL = {
     },
 }
 
+SEND_TOOL = {
+    "name": "mail_versturen",
+    "description": "Verstuur DIRECT een e-mail vanuit de juiste postbus. Gebruik dit "
+                   "ALLEEN nadat Ko expliciet heeft bevestigd dat deze specifieke mail "
+                   "verstuurd mag worden. Twijfel je? Verstuur niet, maar vraag eerst "
+                   "om bevestiging.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "account": {"type": "string",
+                        "enum": ["Kodesaign", "Gmail privé", "Gmail studio"],
+                        "description": "Zakelijk -> Kodesaign; privé -> het Gmail-account."},
+            "to": {"type": "string", "description": "E-mailadres van de ontvanger."},
+            "subject": {"type": "string"},
+            "body": {"type": "string", "description": "De volledige mailtekst."},
+        },
+        "required": ["account", "to", "subject", "body"],
+    },
+}
+
 
 def _build_system(context: str, session_drafts: list[dict]) -> str:
     s = SYSTEM_PROMPT + "\n\n--- Recente mail als context ---\n" + context
@@ -260,16 +303,18 @@ def handle(client: anthropic.Anthropic, history: list[dict], message: str,
         model=CLAUDE_MODEL,
         max_tokens=1500,
         system=_build_system(context, session_drafts),
-        tools=[DRAFT_TOOL],
+        tools=[DRAFT_TOOL, SEND_TOOL],
         messages=messages,
     )
     reply = "".join(b.text for b in resp.content if b.type == "text").strip()
     drafts = [b.input for b in resp.content
               if b.type == "tool_use" and b.name == "concept_klaarzetten"]
+    sends = [b.input for b in resp.content
+             if b.type == "tool_use" and b.name == "mail_versturen"]
     if not reply:
         reply = ("Ik heb een concept voor je klaargezet." if drafts
-                 else "Genoteerd, Ko.")
-    return {"reply": reply, "drafts": drafts}
+                 else "Verstuurd, Ko." if sends else "Genoteerd, Ko.")
+    return {"reply": reply, "drafts": drafts, "sends": sends}
 
 
 def process(client, accounts_by_name, message: str, context: str,
@@ -290,6 +335,19 @@ def process(client, accounts_by_name, message: str, context: str,
         stop.set()
 
     reply = (result.get("reply") or "").strip() or "Genoteerd, Ko."
+
+    # Echt versturen (alleen als Truus de mail_versturen-tool aanriep na bevestiging).
+    for s in result.get("sends", []):
+        acc = accounts_by_name.get(s.get("account"))
+        if not acc or not s.get("to"):
+            reply += f"\n\n⚠️ Kon niet versturen: onbekend account of ontvanger."
+            continue
+        try:
+            send_email(acc, s["to"], s.get("subject", ""), s.get("body", ""))
+            reply += f"\n\n✅ Verstuurd naar {s['to']} vanuit {acc.user}."
+        except Exception as e:
+            print(f"Versturen mislukt ({s.get('account')}): {e}", file=sys.stderr)
+            reply += f"\n\n⚠️ Het versturen lukte niet ({e})."
 
     saved = []
     for d in result.get("drafts", []):
