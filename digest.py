@@ -378,12 +378,15 @@ def _find_drafts_folder(imap: imaplib.IMAP4_SSL, preferred: str) -> str:
     if status != "OK" or not data:
         return preferred
 
+    import re
+
     names: list[str] = []
     special_drafts: str | None = None
     for raw in data:
         line = raw.decode(errors="replace") if isinstance(raw, bytes) else str(raw)
-        # Mapnaam staat als laatste, meestal tussen quotes.
-        name = line.split(' "/" ')[-1].split(' "." ')[-1].strip().strip('"')
+        # De volledige mapnaam is het laatste stuk tussen quotes (of het laatste woord).
+        quoted = re.findall(r'"([^"]*)"', line)
+        name = quoted[-1] if quoted else line.split()[-1]
         names.append(name)
         if "\\Drafts" in line and special_drafts is None:
             special_drafts = name
@@ -393,11 +396,17 @@ def _find_drafts_folder(imap: imaplib.IMAP4_SSL, preferred: str) -> str:
     if special_drafts:
         return special_drafts
 
-    candidates = [preferred, "Drafts", "INBOX.Drafts", "Concepten",
-                  "INBOX.Concepten", "[Gmail]/Drafts"]
-    for cand in candidates:
-        if cand in names:
-            return cand
+    # Match op de LAATSTE naam-segment, ongeacht voorvoegsel/scheidingsteken
+    # (bijv. "INBOX/Concepten", "INBOX.Drafts", "[Gmail]/Drafts").
+    def leaf(n: str) -> str:
+        return re.split(r"[/.]", n)[-1].strip().lower()
+
+    for target in ("concepten", "drafts"):
+        for name in names:
+            if leaf(name) == target:
+                return name
+    if preferred in names:
+        return preferred
     return preferred
 
 
