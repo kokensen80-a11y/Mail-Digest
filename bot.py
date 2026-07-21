@@ -227,6 +227,39 @@ def calendar_events(time_min_iso: str, time_max_iso: str) -> list[dict]:
     return r.get("items", [])
 
 
+def find_free_slots(date_from_iso: str, date_to_iso: str, duration_min: int = 60,
+                    work_start: int = 9, work_end: int = 18) -> list[datetime]:
+    """Vind vrije momenten (binnen werktijd) tussen twee datums."""
+    d_from = datetime.fromisoformat(date_from_iso).date()
+    d_to = datetime.fromisoformat(date_to_iso).date()
+    span_start = datetime(d_from.year, d_from.month, d_from.day, 0, 0, tzinfo=LOCAL_TZ)
+    span_end = datetime(d_to.year, d_to.month, d_to.day, 23, 59, tzinfo=LOCAL_TZ)
+    events = calendar_events(span_start.astimezone(timezone.utc).isoformat(),
+                             span_end.astimezone(timezone.utc).isoformat())
+    busy = []
+    for e in events:
+        s = _event_start(e)
+        end_dt = e.get("end", {}).get("dateTime")
+        if s and end_dt:
+            busy.append((s.astimezone(LOCAL_TZ),
+                         datetime.fromisoformat(end_dt).astimezone(LOCAL_TZ)))
+
+    slots: list[datetime] = []
+    day = d_from
+    while day <= d_to:
+        if day.weekday() < 5:  # ma-vr
+            cursor = datetime(day.year, day.month, day.day, work_start, 0, tzinfo=LOCAL_TZ)
+            day_end = datetime(day.year, day.month, day.day, work_end, 0, tzinfo=LOCAL_TZ)
+            for bstart, bend in sorted(b for b in busy if b[0].date() == day):
+                if (bstart - cursor) >= timedelta(minutes=duration_min):
+                    slots.append(cursor)
+                cursor = max(cursor, bend)
+            if (day_end - cursor) >= timedelta(minutes=duration_min):
+                slots.append(cursor)
+        day += timedelta(days=1)
+    return slots[:12]
+
+
 def _list_calendars() -> list[str]:
     try:
         r = _service("calendar", "v3").calendarList().list().execute()
@@ -358,6 +391,49 @@ def check_reminders() -> None:
                     mark_reminder_sent(bkey)
         mark_reminder_sent(scan_key)
 
+
+def check_todos() -> None:
+    """Herinner aan taken waarvan de deadline (bijna) is bereikt."""
+    today = datetime.now(LOCAL_TZ).date().isoformat()
+    con = sqlite3.connect(DB_PATH)
+    rows = con.execute(
+        "SELECT id, text, due FROM todos WHERE done = 0 AND reminded = 0 "
+        "AND due IS NOT NULL AND due <= ?", (today,)).fetchall()
+    for tid, text, due in rows:
+        send_telegram(f"✅ Herinnering: *{text}* (deadline {due}).")
+        con.execute("UPDATE todos SET reminded = 1 WHERE id = ?", (tid,))
+    con.commit()
+    con.close()
+
+
+def check_followups(accounts) -> None:
+    """Follow-up radar: por Ko over mails waar nog geen antwoord op kwam."""
+    now = datetime.now(timezone.utc)
+    due = [f for f in followup_list_open()
+           if datetime.fromisoformat(f["remind_after"]) <= now]
+    if not due:
+        return
+    since = now - timedelta(days=21)
+    inbox = []
+    for acc in accounts:
+        try:
+            inbox.extend(fetch_recent(acc, since))
+        except Exception:
+            continue
+    for f in due:
+        sent = datetime.fromisoformat(f["sent_ts"])
+        replied = any(f["to_email"].lower() in (m.sender or "").lower()
+                      and m.date and m.date > sent for m in inbox)
+        if replied:
+            followup_close(f["id"])
+            continue
+        days = max((now - sent).days, 1)
+        send_telegram(
+            f"📮 Je wacht al {days} dagen op antwoord van {f['to_email']} over "
+            f"'{f['subject']}'. Zal ik een vriendelijke reminder sturen? "
+            f"(Of zeg 'klaar' om te stoppen met volgen.)")
+        followup_mark_nudged(f["id"])
+
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")
 CONTEXT_LOOKBACK_HOURS = int(os.getenv("BOT_CONTEXT_HOURS", "120"))  # 5 dagen
 DB_PATH = os.getenv("TRUUS_DB",
@@ -417,6 +493,22 @@ def init_db() -> None:
     con.execute("""CREATE TABLE IF NOT EXISTS sent_reminders (
         key TEXT PRIMARY KEY,
         ts TEXT NOT NULL)""")
+    con.execute("""CREATE TABLE IF NOT EXISTS todos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts TEXT NOT NULL,
+        text TEXT NOT NULL,
+        due TEXT,
+        done INTEGER DEFAULT 0,
+        reminded INTEGER DEFAULT 0)""")
+    con.execute("""CREATE TABLE IF NOT EXISTS followups (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts TEXT NOT NULL,
+        to_email TEXT NOT NULL,
+        subject TEXT,
+        sent_ts TEXT NOT NULL,
+        remind_after TEXT NOT NULL,
+        done INTEGER DEFAULT 0,
+        nudged INTEGER DEFAULT 0)""")
     con.commit()
     con.close()
 
@@ -440,6 +532,96 @@ def mark_reminder_sent(key: str) -> None:
         con.close()
     except Exception as e:
         print(f"Reminder-markering faalde: {e}", file=sys.stderr)
+
+
+# --- To-do's ---------------------------------------------------------------
+
+def todo_add(text: str, due: str | None = None) -> None:
+    con = sqlite3.connect(DB_PATH)
+    con.execute("INSERT INTO todos (ts, text, due) VALUES (?, ?, ?)",
+                (datetime.now(timezone.utc).isoformat(), text, due or None))
+    con.commit()
+    con.close()
+
+
+def todo_list_open() -> list[dict]:
+    con = sqlite3.connect(DB_PATH)
+    rows = con.execute(
+        "SELECT id, text, due FROM todos WHERE done = 0 ORDER BY id").fetchall()
+    con.close()
+    return [{"id": i, "text": t, "due": d} for i, t, d in rows]
+
+
+def todo_complete(text_fragment: str) -> str:
+    con = sqlite3.connect(DB_PATH)
+    row = con.execute(
+        "SELECT id, text FROM todos WHERE done = 0 AND text LIKE ? ORDER BY id LIMIT 1",
+        (f"%{text_fragment}%",)).fetchone()
+    if row:
+        con.execute("UPDATE todos SET done = 1 WHERE id = ?", (row[0],))
+        con.commit()
+    con.close()
+    return row[1] if row else ""
+
+
+def todos_context() -> str:
+    todos = todo_list_open()
+    if not todos:
+        return "Geen openstaande taken."
+    lines = []
+    for t in todos:
+        due = f" (voor {t['due']})" if t.get("due") else ""
+        lines.append(f"- [id:{t['id']}] {t['text']}{due}")
+    return "Openstaande taken:\n" + "\n".join(lines)
+
+
+# --- Geheugen doorzoeken ---------------------------------------------------
+
+def memory_search(query: str, limit: int = 8) -> list[dict]:
+    con = sqlite3.connect(DB_PATH)
+    rows = con.execute(
+        "SELECT ts, role, content FROM messages WHERE content LIKE ? "
+        "ORDER BY id DESC LIMIT ?", (f"%{query}%", limit)).fetchall()
+    con.close()
+    return [{"ts": ts, "role": r, "content": c} for ts, r, c in rows]
+
+
+# --- Follow-ups (wachten-op-antwoord) --------------------------------------
+
+def followup_add(to_email: str, subject: str, days: int = 3) -> None:
+    now = datetime.now(timezone.utc)
+    remind_after = (now + timedelta(days=days)).isoformat()
+    con = sqlite3.connect(DB_PATH)
+    con.execute("INSERT INTO followups (ts, to_email, subject, sent_ts, remind_after) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (now.isoformat(), to_email, subject, now.isoformat(), remind_after))
+    con.commit()
+    con.close()
+
+
+def followup_list_open() -> list[dict]:
+    con = sqlite3.connect(DB_PATH)
+    rows = con.execute(
+        "SELECT id, to_email, subject, sent_ts, remind_after, nudged "
+        "FROM followups WHERE done = 0 ORDER BY id").fetchall()
+    con.close()
+    return [{"id": i, "to_email": e, "subject": s, "sent_ts": st,
+             "remind_after": ra, "nudged": n} for i, e, s, st, ra, n in rows]
+
+
+def followup_close(id_: int) -> None:
+    con = sqlite3.connect(DB_PATH)
+    con.execute("UPDATE followups SET done = 1 WHERE id = ?", (id_,))
+    con.commit()
+    con.close()
+
+
+def followup_mark_nudged(id_: int) -> None:
+    con = sqlite3.connect(DB_PATH)
+    con.execute("UPDATE followups SET nudged = 1, remind_after = ? WHERE id = ?",
+                ((datetime.now(timezone.utc) + timedelta(days=3)).isoformat(), id_))
+    con.commit()
+    con.close()
 
 
 def load_history(limit: int = HISTORY_LOAD) -> list[dict]:
@@ -571,6 +753,14 @@ betreffende afspraak in het overzicht en verwijder die.
    Bevestig kort wat je deed. Gebruik de datum/tijd hieronder om "morgen", "volgende week" \
 enz. correct om te rekenen. Standaardduur van een afspraak is 1 uur tenzij Ko iets \
 anders zegt.
+4. Meedenken en organiseren:
+   - To-do's: 'taak_toevoegen' bij "onthoud dat ik...", "ik moet nog...". 'taak_afronden' \
+als iets klaar is. Ko's openstaande taken staan hieronder in je context.
+   - Geheugen: 'geheugen_doorzoeken' bij "wat had ik ook alweer gezegd/afgesproken over...".
+   - Slim plannen: 'vrije_tijd_zoeken' om een vrij moment te vinden; stel dat voor en plan \
+daarna eventueel de afspraak of meeting in.
+   - Follow-ups: elke mail die je verstuurt volg je automatisch op antwoord; je port Ko als \
+er te lang niks komt. Zegt Ko dat iets is afgehandeld, gebruik dan 'followup_sluiten'.
 
 Je onthoudt het lopende gesprek (je krijgt de eerdere berichten mee) plus een lijst van \
 concepten die je deze sessie al hebt klaargezet. Als Ko vraagt "laat dat concept zien" \
@@ -655,6 +845,70 @@ MEETING_TOOL = {
     },
 }
 
+TODO_ADD_TOOL = {
+    "name": "taak_toevoegen",
+    "description": "Voeg een taak/to-do toe aan Ko's lijst. Gebruik dit als Ko zegt "
+                   "'onthoud dat ik ...', 'ik moet nog ...', 'zet op mijn lijst ...'. "
+                   "Geef een deadline (due) mee als Ko een datum noemt.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "text": {"type": "string", "description": "De taak."},
+            "due": {"type": "string", "description": "Deadline als YYYY-MM-DD (optioneel)."},
+        },
+        "required": ["text"],
+    },
+}
+
+TODO_DONE_TOOL = {
+    "name": "taak_afronden",
+    "description": "Markeer een taak als klaar. Geef een stukje van de taaktekst mee.",
+    "input_schema": {
+        "type": "object",
+        "properties": {"tekst": {"type": "string"}},
+        "required": ["tekst"],
+    },
+}
+
+MEMORY_SEARCH_TOOL = {
+    "name": "geheugen_doorzoeken",
+    "description": "Doorzoek eerdere gesprekken met Ko op een trefwoord. Gebruik dit "
+                   "als Ko vraagt 'wat had ik ook alweer gezegd/afgesproken over ...'.",
+    "input_schema": {
+        "type": "object",
+        "properties": {"zoekterm": {"type": "string"}},
+        "required": ["zoekterm"],
+    },
+}
+
+FREESLOT_TOOL = {
+    "name": "vrije_tijd_zoeken",
+    "description": "Vind vrije momenten in Ko's agenda (binnen werktijd, ma-vr 9-18u) "
+                   "tussen twee datums. Gebruik dit voor 'wanneer ben ik vrij?' of om een "
+                   "meeting in te plannen op een moment dat Ko vrij is.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "van": {"type": "string", "description": "Begindatum YYYY-MM-DD."},
+            "tot": {"type": "string", "description": "Einddatum YYYY-MM-DD."},
+            "duur_minuten": {"type": "integer", "description": "Gewenste duur (standaard 60)."},
+        },
+        "required": ["van", "tot"],
+    },
+}
+
+FOLLOWUP_CLOSE_TOOL = {
+    "name": "followup_sluiten",
+    "description": "Stop met het volgen van een openstaande follow-up (wachten op "
+                   "antwoord). Gebruik dit als Ko zegt dat het klaar/afgehandeld is.",
+    "input_schema": {
+        "type": "object",
+        "properties": {"to_email": {"type": "string",
+                       "description": "Het e-mailadres van de follow-up die weg mag."}},
+        "required": ["to_email"],
+    },
+}
+
 DELETE_EVENT_TOOL = {
     "name": "agenda_afspraak_verwijderen",
     "description": "Verwijder een afspraak uit de agenda. Gebruik het event_id dat "
@@ -698,6 +952,7 @@ def _build_system(context: str, agenda: str, session_drafts: list[dict]) -> str:
          f"tijdzone en gebruik deze offset in de ISO-tijden (bijv. ...T15:00:00{now.strftime('%z')[:3]}:00)."
          + "\n\n--- Je agenda (gebruik dit om 'ben ik druk?' te beantwoorden) ---\n"
          + agenda
+         + "\n\n--- Openstaande taken van Ko ---\n" + todos_context()
          + "\n\n--- Recente mail als context ---\n" + context)
     if session_drafts:
         s += "\n\n--- Concepten die je deze sessie al hebt klaargezet ---\n"
@@ -740,7 +995,12 @@ def execute_tool(name: str, inp: dict, accounts_by_name: dict,
                 send_email(acc, to, inp.get("subject", ""), inp.get("body", ""))
             else:
                 return "Geen verzendmethode beschikbaar."
-            return f"Verstuurd naar {to}."
+            # Follow-up radar: houd bij dat we op antwoord wachten.
+            try:
+                followup_add(to, inp.get("subject", "(geen onderwerp)"))
+            except Exception as e:
+                print(f"Follow-up toevoegen faalde: {e}", file=sys.stderr)
+            return f"Verstuurd naar {to}. (Ik hou in de gaten of er antwoord komt.)"
         except Exception as e:
             return f"Versturen mislukt: {e}"
 
@@ -769,11 +1029,50 @@ def execute_tool(name: str, inp: dict, accounts_by_name: dict,
         except Exception as e:
             return f"Verwijderen mislukt: {e}"
 
+    if name == "taak_toevoegen":
+        try:
+            todo_add(inp.get("text", ""), inp.get("due"))
+            return "Taak toegevoegd aan je lijst."
+        except Exception as e:
+            return f"Taak toevoegen mislukt: {e}"
+
+    if name == "taak_afronden":
+        done = todo_complete(inp.get("tekst", ""))
+        return f"Afgevinkt: {done}" if done else "Geen bijpassende open taak gevonden."
+
+    if name == "geheugen_doorzoeken":
+        hits = memory_search(inp.get("zoekterm", ""))
+        if not hits:
+            return "Niks gevonden in eerdere gesprekken."
+        return "Uit eerdere gesprekken:\n" + "\n".join(
+            f"- ({h['role']}) {h['content'][:200]}" for h in hits)
+
+    if name == "vrije_tijd_zoeken":
+        try:
+            slots = find_free_slots(inp["van"], inp["tot"],
+                                    int(inp.get("duur_minuten", 60)))
+            if not slots:
+                return "Geen vrije momenten gevonden in die periode (binnen werktijd)."
+            return "Vrije momenten:\n" + "\n".join(
+                "- " + s.strftime("%a %d-%m %H:%M") for s in slots)
+        except Exception as e:
+            return f"Vrije tijd zoeken mislukt: {e}"
+
+    if name == "followup_sluiten":
+        target = (inp.get("to_email") or "").lower()
+        closed = 0
+        for f in followup_list_open():
+            if target in f["to_email"].lower():
+                followup_close(f["id"])
+                closed += 1
+        return f"{closed} follow-up(s) afgesloten." if closed else "Geen follow-up gevonden."
+
     return f"Onbekende tool: {name}"
 
 
 ALL_TOOLS = [CONTACT_TOOL, DRAFT_TOOL, SEND_TOOL, CALENDAR_TOOL,
-             MEETING_TOOL, DELETE_EVENT_TOOL]
+             MEETING_TOOL, DELETE_EVENT_TOOL, TODO_ADD_TOOL, TODO_DONE_TOOL,
+             MEMORY_SEARCH_TOOL, FREESLOT_TOOL, FOLLOWUP_CLOSE_TOOL]
 
 
 def handle(client: anthropic.Anthropic, history: list[dict], message: str,
@@ -885,17 +1184,29 @@ def main() -> int:
 
     threading.Thread(target=refresh_context_loop, daemon=True).start()
 
-    # Reminder-thread: dagelijkse samenvatting + herinnering ~1 uur vooraf.
+    # Reminder-thread: agenda-samenvatting, 1u-vooraf, verjaardagen, taken, follow-ups.
     def reminder_loop():
+        last_followup = 0.0
         while True:
             try:
-                check_reminders()
+                if google_enabled():
+                    check_reminders()
             except Exception as e:
                 print(f"Reminder-check faalde: {e}", file=sys.stderr)
+            try:
+                check_todos()
+            except Exception as e:
+                print(f"Taak-check faalde: {e}", file=sys.stderr)
+            # Follow-up radar hooguit elke ~20 min (checkt inbox).
+            if time.time() - last_followup > 1200:
+                try:
+                    check_followups(accounts)
+                except Exception as e:
+                    print(f"Follow-up-check faalde: {e}", file=sys.stderr)
+                last_followup = time.time()
             time.sleep(120)
 
-    if google_enabled():
-        threading.Thread(target=reminder_loop, daemon=True).start()
+    threading.Thread(target=reminder_loop, daemon=True).start()
 
     init_db()
     start = time.time()
