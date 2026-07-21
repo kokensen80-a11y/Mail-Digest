@@ -41,7 +41,7 @@ CONTEXT_LOOKBACK_HOURS = int(os.getenv("BOT_CONTEXT_HOURS", "120"))  # 5 dagen
 CONTEXT_MAX_AGE_S = 180        # mailcontext maximaal 3 min hergebruiken
 MAX_CONTEXT_MAILS = 40
 LONGPOLL_TIMEOUT = 50          # seconden dat Telegram de verbinding openhoudt
-SESSION_BUDGET_S = int(os.getenv("BOT_BUDGET_SECONDS", "20400"))  # ~5u40m
+SESSION_BUDGET_S = int(os.getenv("BOT_BUDGET_SECONDS") or "20400")  # ~5u40m
 STARTUP_SKIP_OLDER_S = 900     # bij (her)start: berichten ouder dan 15 min overslaan
 
 
@@ -49,9 +49,31 @@ STARTUP_SKIP_OLDER_S = 900     # bij (her)start: berichten ouder dan 15 min over
 # Telegram
 # ---------------------------------------------------------------------------
 
+DEBUG = os.getenv("BOT_DEBUG", "").strip() not in ("", "0", "false", "False")
+
+
 def _api(method: str) -> str:
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     return f"https://api.telegram.org/bot{token}/{method}"
+
+
+def delete_webhook() -> None:
+    """Zorg dat getUpdates kan werken (een actieve webhook zou dat blokkeren)."""
+    try:
+        requests.get(_api("deleteWebhook"),
+                     params={"drop_pending_updates": "false"}, timeout=15)
+    except Exception as e:
+        print(f"deleteWebhook faalde (niet fataal): {e}", file=sys.stderr)
+
+
+def send_typing() -> None:
+    """Toon 'Truus is aan het typen…' in Telegram (verdwijnt na ~5s vanzelf)."""
+    try:
+        requests.post(_api("sendChatAction"),
+                      data={"chat_id": os.environ["TELEGRAM_CHAT_ID"],
+                            "action": "typing"}, timeout=10)
+    except Exception as e:
+        print(f"sendChatAction faalde: {e}", file=sys.stderr)
 
 
 def poll(offset: int | None, skip_before_ts: float | None) -> tuple[list[str], int | None]:
@@ -63,6 +85,11 @@ def poll(offset: int | None, skip_before_ts: float | None) -> tuple[list[str], i
     r = requests.get(_api("getUpdates"), params=params, timeout=LONGPOLL_TIMEOUT + 15)
     r.raise_for_status()
     updates = r.json().get("result", [])
+    if DEBUG and updates:
+        ids = [(u.get("message") or u.get("edited_message") or {}).get("chat", {}).get("id")
+               for u in updates]
+        print(f"[debug] {len(updates)} update(s); chat-ids={ids}; "
+              f"verwacht chat-id={chat_id}", file=sys.stderr)
 
     texts: list[str] = []
     new_offset = offset
@@ -72,6 +99,9 @@ def poll(offset: int | None, skip_before_ts: float | None) -> tuple[list[str], i
         if not msg:
             continue
         if str(msg.get("chat", {}).get("id")) != chat_id:
+            if DEBUG:
+                print(f"[debug] bericht overgeslagen: chat-id "
+                      f"{msg.get('chat', {}).get('id')} != {chat_id}", file=sys.stderr)
             continue
         # Bij (her)start oude berichten overslaan zodat Truus niet op verouderde
         # appjes reageert.
@@ -167,6 +197,7 @@ def handle(client: anthropic.Anthropic, message: str, context: str) -> dict:
 
 
 def process(client, accounts_by_name, message: str, context: str) -> None:
+    send_typing()  # laat meteen "Truus is aan het typen…" zien
     result = handle(client, message, context)
     reply = (result.get("reply") or "").strip() or "Genoteerd, Ko."
 
@@ -214,13 +245,16 @@ def main() -> int:
     accounts = load_accounts()
     accounts_by_name = {a.name: a for a in accounts}
 
+    delete_webhook()  # eventuele oude webhook weg, anders werkt getUpdates niet
+
     start = time.time()
     offset: int | None = None
     skip_before = time.time() - STARTUP_SKIP_OLDER_S  # bij start oude appjes negeren
     context = "(nog niet geladen)"
     context_ts = 0.0
 
-    print("Truus luistert live...", file=sys.stderr)
+    print(f"Truus luistert live... (debug={DEBUG}, budget={SESSION_BUDGET_S}s)",
+          file=sys.stderr)
     while time.time() - start < SESSION_BUDGET_S:
         try:
             texts, offset = poll(offset, skip_before)
@@ -230,6 +264,8 @@ def main() -> int:
             continue
         skip_before = None  # alleen de eerste ronde oude berichten overslaan
 
+        if DEBUG and texts:
+            print(f"[debug] {len(texts)} bericht(en) te verwerken", file=sys.stderr)
         for text in texts:
             if time.time() - context_ts > CONTEXT_MAX_AGE_S:
                 context = _format_context(gather_mail_context(accounts))
@@ -244,7 +280,10 @@ def main() -> int:
                 except Exception:
                     pass
 
-    restart_self()
+    if not DEBUG:
+        restart_self()
+    else:
+        print("[debug] sessie klaar; geen herstart in debug-modus.", file=sys.stderr)
     return 0
 
 

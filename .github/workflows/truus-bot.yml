@@ -5,7 +5,16 @@ on:
   # vangnet dat Truus weer opstart mocht een sessie onverwacht crashen.
   schedule:
     - cron: "7 */6 * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      debug:
+        description: "Debug-modus (1 = korte sessie met logging)"
+        required: false
+        default: "0"
+      budget_seconds:
+        description: "Sessieduur in seconden (leeg = normaal)"
+        required: false
+        default: ""
 
 # Nooit twee live-sessies tegelijk (Telegram staat maar één luisteraar toe).
 concurrency:
@@ -33,6 +42,8 @@ jobs:
       - name: Truus luistert live
         env:
           GH_TOKEN: ${{ github.token }}
+          BOT_DEBUG: ${{ github.event.inputs.debug }}
+          BOT_BUDGET_SECONDS: ${{ github.event.inputs.budget_seconds }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
