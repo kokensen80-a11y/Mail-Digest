@@ -1,23 +1,28 @@
 #!/usr/bin/env python3
 """
-Luisterende Truus — verwerkt je Telegram-berichten en voert taken uit.
+Luisterende Truus (live-modus) — je kunt met haar appen via Telegram.
 
-Draait periodiek (GitHub Actions). Elke keer:
-  1. Haalt nieuwe Telegram-berichten op (getUpdates) van Ko.
-  2. Laat Claude begrijpen wat Ko vraagt, met je recente mail als context.
-  3. Voert het uit: een vraag beantwoorden, je mail doorzoeken/samenvatten,
-     of een concept-antwoord klaarzetten in het juiste account.
-  4. Antwoordt terug in Telegram.
+Draait als een doorlopende sessie op GitHub Actions. Ze "hangt aan de lijn"
+met Telegram long-polling en reageert binnen enkele seconden op je berichten.
+Elke sessie loopt maximaal ~5u40m; daarna start ze zichzelf opnieuw op, zodat
+Truus in de praktijk 24/7 bereikbaar is.
 
-Herbruikt de bouwstenen uit digest.py. Geen wachtwoorden in dit bestand —
-alles komt uit environment variables (GitHub Secrets).
+Wat ze kan:
+  - je vragen beantwoorden / dingen uitzoeken;
+  - je recente mail doorzoeken en samenvatten;
+  - een concept-antwoord of nieuwe mail klaarzetten in het juiste account
+    (zakelijk -> info@kodesaign.com). Ze verstuurt niks zelf; jij tikt op verzenden.
+
+Herbruikt de bouwstenen uit digest.py. Geen wachtwoorden in dit bestand.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
+import time
 from datetime import datetime, timedelta, timezone
 
 import anthropic
@@ -33,11 +38,15 @@ from digest import (
 
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")
 CONTEXT_LOOKBACK_HOURS = int(os.getenv("BOT_CONTEXT_HOURS", "120"))  # 5 dagen
+CONTEXT_MAX_AGE_S = 180        # mailcontext maximaal 3 min hergebruiken
 MAX_CONTEXT_MAILS = 40
+LONGPOLL_TIMEOUT = 50          # seconden dat Telegram de verbinding openhoudt
+SESSION_BUDGET_S = int(os.getenv("BOT_BUDGET_SECONDS", "20400"))  # ~5u40m
+STARTUP_SKIP_OLDER_S = 900     # bij (her)start: berichten ouder dan 15 min overslaan
 
 
 # ---------------------------------------------------------------------------
-# Telegram in- en uitvoer
+# Telegram
 # ---------------------------------------------------------------------------
 
 def _api(method: str) -> str:
@@ -45,45 +54,40 @@ def _api(method: str) -> str:
     return f"https://api.telegram.org/bot{token}/{method}"
 
 
-def get_new_messages() -> tuple[list[str], int | None]:
-    """Haal nieuwe tekstberichten van Ko op.
-
-    Geeft (berichten, hoogste_update_id) terug. We bevestigen de updates pas
-    na verwerking, zodat er niks verloren gaat als een run halverwege faalt.
-    """
+def poll(offset: int | None, skip_before_ts: float | None) -> tuple[list[str], int | None]:
+    """Long-poll Telegram. Geeft (nieuwe berichten van Ko, nieuwe offset) terug."""
     chat_id = str(os.environ["TELEGRAM_CHAT_ID"])
-    r = requests.get(_api("getUpdates"), params={"timeout": 0}, timeout=30)
+    params = {"timeout": LONGPOLL_TIMEOUT}
+    if offset is not None:
+        params["offset"] = offset
+    r = requests.get(_api("getUpdates"), params=params, timeout=LONGPOLL_TIMEOUT + 15)
     r.raise_for_status()
     updates = r.json().get("result", [])
 
-    messages: list[str] = []
-    last_id: int | None = None
+    texts: list[str] = []
+    new_offset = offset
     for u in updates:
-        last_id = u["update_id"]
+        new_offset = u["update_id"] + 1
         msg = u.get("message") or u.get("edited_message")
         if not msg:
             continue
-        # Alleen berichten van Ko zelf verwerken.
         if str(msg.get("chat", {}).get("id")) != chat_id:
+            continue
+        # Bij (her)start oude berichten overslaan zodat Truus niet op verouderde
+        # appjes reageert.
+        if skip_before_ts is not None and msg.get("date", 0) < skip_before_ts:
             continue
         text = msg.get("text")
         if text:
-            messages.append(text.strip())
-    return messages, last_id
-
-
-def confirm_updates(last_id: int) -> None:
-    """Bevestig verwerkte updates zodat ze niet opnieuw langskomen."""
-    requests.get(_api("getUpdates"),
-                 params={"offset": last_id + 1, "timeout": 0}, timeout=30)
+            texts.append(text.strip())
+    return texts, new_offset
 
 
 # ---------------------------------------------------------------------------
-# Mailcontext ophalen (zodat Truus 'de mail van Jan' kan vinden)
+# Mailcontext
 # ---------------------------------------------------------------------------
 
-def gather_mail_context() -> list[Mail]:
-    accounts = load_accounts()
+def gather_mail_context(accounts) -> list[Mail]:
     since = datetime.now(timezone.utc) - timedelta(hours=CONTEXT_LOOKBACK_HOURS)
     mails: list[Mail] = []
     for acc in accounts:
@@ -91,7 +95,6 @@ def gather_mail_context() -> list[Mail]:
             mails.extend(fetch_recent(acc, since))
         except Exception as e:
             print(f"Kon mail niet ophalen bij {acc.name}: {e}", file=sys.stderr)
-    # Nieuwste eerst, afkappen.
     mails.sort(key=lambda m: m.date or datetime.min.replace(tzinfo=timezone.utc),
                reverse=True)
     return mails[:MAX_CONTEXT_MAILS]
@@ -111,22 +114,22 @@ def _format_context(mails: list[Mail]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Claude: begrijp de opdracht en bepaal de actie
+# Claude: begrijp de opdracht
 # ---------------------------------------------------------------------------
 
 SYSTEM_PROMPT = """Je bent Truus, de persoonlijke assistent van Ko. Ko appt je via \
 Telegram met vragen en opdrachten. Je bent warm, betrokken en to-the-point, in het \
 Nederlands. Je krijgt Ko's recente mail als context, zodat je kunt verwijzen naar \
-concrete berichten ("de mail van Jan").
+concrete berichten ("de mail van Jan"). Reageer natuurlijk, alsof je samen aan het \
+appen bent.
 
-Je kunt drie dingen doen, en je geeft ALTIJD een kort, menselijk antwoord terug in \
-'reply' (dat stuur ik naar Telegram):
+Je kunt:
 1. Een vraag beantwoorden of iets uitzoeken/samenvatten uit de mailcontext.
-2. Een concept-antwoord of nieuwe mail klaarzetten (zet 'm in 'drafts'). Verstuur \
-NOOIT zelf een mail — je zet een concept klaar en Ko verstuurt het met één tik. \
-Zeg in 'reply' duidelijk dat het als concept klaarstaat en in welk account.
-3. Iets dat nog niet kan (bijv. een afspraak in de agenda zetten): leg vriendelijk \
-uit dat die koppeling nog niet actief is.
+2. Een concept-antwoord of nieuwe mail klaarzetten (in 'drafts'). Verstuur NOOIT zelf \
+een mail — je zet een concept klaar en Ko verstuurt het met één tik. Zeg in 'reply' \
+duidelijk dat het als concept klaarstaat en in welk account.
+3. Iets dat nog niet kan (bijv. een afspraak in de agenda zetten): leg vriendelijk uit \
+dat die koppeling nog niet actief is.
 
 ROUTERING van concepten: is het zakelijk (klant, opdracht, offerte, leverancier, \
 factuur, Kodesaign)? Zet 'account' dan op "Kodesaign" (verstuurt vanuit \
@@ -135,7 +138,7 @@ waar de oorspronkelijke mail binnenkwam.
 
 Antwoord UITSLUITEND met geldige JSON:
 {
-  "reply": "<kort Telegram-antwoord aan Ko>",
+  "reply": "<kort, menselijk Telegram-antwoord aan Ko>",
   "drafts": [
     {"account": "Kodesaign | Gmail privé | Gmail studio", "to": "<e-mailadres>", \
 "subject": "<onderwerp>", "body": "<concept-tekst>"}
@@ -144,12 +147,8 @@ Antwoord UITSLUITEND met geldige JSON:
 Laat 'drafts' leeg ([]) als er niks klaargezet hoeft te worden. Geen tekst buiten de JSON."""
 
 
-def handle(message: str, context: str) -> dict:
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    payload = (
-        f"Ko's bericht:\n{message}\n\n"
-        f"--- Recente mail als context ---\n{context}"
-    )
+def handle(client: anthropic.Anthropic, message: str, context: str) -> dict:
+    payload = f"Ko's bericht:\n{message}\n\n--- Recente mail als context ---\n{context}"
     resp = client.messages.create(
         model=CLAUDE_MODEL,
         max_tokens=1500,
@@ -167,54 +166,85 @@ def handle(message: str, context: str) -> dict:
                 "drafts": []}
 
 
+def process(client, accounts_by_name, message: str, context: str) -> None:
+    result = handle(client, message, context)
+    reply = (result.get("reply") or "").strip() or "Genoteerd, Ko."
+
+    saved = []
+    for d in result.get("drafts", []):
+        acc = accounts_by_name.get(d.get("account"))
+        if not acc or not d.get("to"):
+            continue
+        try:
+            save_draft(acc, d["to"], d.get("subject", "Re:"), d.get("body", ""))
+            saved.append(acc.user)
+        except Exception as e:
+            print(f"Concept opslaan mislukt ({d.get('account')}): {e}", file=sys.stderr)
+            reply += f"\n\n⚠️ Het concept opslaan lukte niet ({d.get('account')})."
+    if saved:
+        reply += f"\n\n✍️ Concept klaargezet in: {', '.join(dict.fromkeys(saved))}."
+
+    send_telegram(reply)
+
+
 # ---------------------------------------------------------------------------
-# Main
+# Zichzelf opnieuw starten aan het eind van de sessie (continuïteit)
+# ---------------------------------------------------------------------------
+
+def restart_self() -> None:
+    repo = os.getenv("GITHUB_REPOSITORY")
+    if not repo or not os.getenv("GH_TOKEN"):
+        return  # niet in Actions; niks te doen
+    try:
+        subprocess.run(
+            ["gh", "workflow", "run", "truus-bot.yml", "--repo", repo],
+            check=False, capture_output=True, timeout=30,
+        )
+        print("Opvolg-sessie gestart.", file=sys.stderr)
+    except Exception as e:
+        print(f"Kon opvolg-sessie niet starten: {e}", file=sys.stderr)
+
+
+# ---------------------------------------------------------------------------
+# Main-loop
 # ---------------------------------------------------------------------------
 
 def main() -> int:
-    try:
-        messages, last_id = get_new_messages()
-    except Exception as e:
-        print(f"Kon Telegram-updates niet ophalen: {e}", file=sys.stderr)
-        return 1
+    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    accounts = load_accounts()
+    accounts_by_name = {a.name: a for a in accounts}
 
-    if not messages:
-        return 0  # niks te doen, stil afsluiten
+    start = time.time()
+    offset: int | None = None
+    skip_before = time.time() - STARTUP_SKIP_OLDER_S  # bij start oude appjes negeren
+    context = "(nog niet geladen)"
+    context_ts = 0.0
 
-    # Mailcontext één keer ophalen voor alle berichten in deze ronde.
-    context = _format_context(gather_mail_context())
-
-    accounts = {a.name: a for a in load_accounts()}
-    for message in messages:
-        result = handle(message, context)
-        reply = result.get("reply", "").strip() or "Genoteerd, Ko."
-
-        saved = []
-        for d in result.get("drafts", []):
-            acc = accounts.get(d.get("account"))
-            if not acc or not d.get("to"):
-                continue
-            try:
-                save_draft(acc, d["to"], d.get("subject", "Re:"), d.get("body", ""))
-                saved.append(acc.user)
-            except Exception as e:
-                print(f"Concept opslaan mislukt ({d.get('account')}): {e}",
-                      file=sys.stderr)
-                reply += f"\n\n⚠️ Het concept opslaan lukte niet ({acc.user})."
-
-        if saved:
-            waar = ", ".join(dict.fromkeys(saved))
-            reply += f"\n\n✍️ Concept klaargezet in: {waar}."
-
-        send_telegram(reply)
-
-    # Pas ná verwerking bevestigen.
-    if last_id is not None:
+    print("Truus luistert live...", file=sys.stderr)
+    while time.time() - start < SESSION_BUDGET_S:
         try:
-            confirm_updates(last_id)
+            texts, offset = poll(offset, skip_before)
         except Exception as e:
-            print(f"Kon updates niet bevestigen: {e}", file=sys.stderr)
+            print(f"Poll-fout: {e}", file=sys.stderr)
+            time.sleep(5)
+            continue
+        skip_before = None  # alleen de eerste ronde oude berichten overslaan
 
+        for text in texts:
+            if time.time() - context_ts > CONTEXT_MAX_AGE_S:
+                context = _format_context(gather_mail_context(accounts))
+                context_ts = time.time()
+            try:
+                process(client, accounts_by_name, text, context)
+            except Exception as e:
+                print(f"Verwerken mislukt: {e}", file=sys.stderr)
+                try:
+                    send_telegram("Sorry Ko, daar ging iets mis aan mijn kant. "
+                                  "Probeer het zo nog eens?")
+                except Exception:
+                    pass
+
+    restart_self()
     return 0
 
 
