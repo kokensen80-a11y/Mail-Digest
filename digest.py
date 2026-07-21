@@ -497,6 +497,18 @@ def main() -> int:
             parts.append("⚠️ Niet gelukt om klaar te zetten: " + "; ".join(failed))
         send_telegram("\n".join(parts))
 
+    # --- TIJDELIJKE SELFTEST: bewijs dat schrijven naar Kodesaign werkt ---
+    test_acc = by_name.get("Kodesaign")
+    if test_acc:
+        try:
+            save_draft(test_acc, "test@voorbeeld.nl",
+                       "TEST — Truus conceptcheck (mag weg)",
+                       "Testconcept van Truus om te controleren of concepten in "
+                       "info@kodesaign.com belanden. Je mag dit gerust verwijderen.")
+            print("[debug] SELFTEST concept naar Kodesaign geschreven", file=sys.stderr)
+        except Exception as e:
+            print(f"[debug] SELFTEST MISLUKT: {e}", file=sys.stderr)
+
     return 0
 
 
