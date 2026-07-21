@@ -74,25 +74,48 @@ def google_enabled() -> bool:
     return os.path.exists(GOOGLE_TOKEN_FILE)
 
 
+# Verbindingen worden één keer opgebouwd en hergebruikt (scheelt veel tijd).
+_google_cache: dict = {}
+
+
 def _google_creds():
-    from google.oauth2.credentials import Credentials
-    with open(GOOGLE_TOKEN_FILE) as f:
-        d = json.load(f)
-    return Credentials(
-        token=None,
-        refresh_token=d["refresh_token"],
-        client_id=d["client_id"],
-        client_secret=d["client_secret"],
-        token_uri="https://oauth2.googleapis.com/token",
-        scopes=GOOGLE_SCOPES,
-    )
+    if "creds" not in _google_cache:
+        from google.oauth2.credentials import Credentials
+        with open(GOOGLE_TOKEN_FILE) as f:
+            d = json.load(f)
+        _google_cache["creds"] = Credentials(
+            token=None,
+            refresh_token=d["refresh_token"],
+            client_id=d["client_id"],
+            client_secret=d["client_secret"],
+            token_uri="https://oauth2.googleapis.com/token",
+            scopes=GOOGLE_SCOPES,
+        )
+    return _google_cache["creds"]
+
+
+def _service(name: str, version: str):
+    key = f"svc:{name}"
+    if key not in _google_cache:
+        from googleapiclient.discovery import build
+        _google_cache[key] = build(name, version, credentials=_google_creds(),
+                                   cache_discovery=False)
+    return _google_cache[key]
+
+
+def warm_google() -> None:
+    """Bouw de verbindingen alvast op bij de start, zodat de eerste actie snel is."""
+    if google_enabled():
+        try:
+            _service("gmail", "v1")
+            _service("calendar", "v3")
+        except Exception as e:
+            print(f"Google opwarmen faalde: {e}", file=sys.stderr)
 
 
 def gmail_send(to_addr: str, subject: str, body: str, sender: str | None = None) -> None:
     """Verstuur een mail via de Gmail API (vanuit kokensen80, evt. met alias-afzender)."""
     import base64
-    from googleapiclient.discovery import build
-
     msg = EmailMessage()
     msg["To"] = to_addr
     msg["Subject"] = subject
@@ -100,15 +123,13 @@ def gmail_send(to_addr: str, subject: str, body: str, sender: str | None = None)
         msg["From"] = sender
     msg.set_content(body)
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
-    svc = build("gmail", "v1", credentials=_google_creds(), cache_discovery=False)
-    svc.users().messages().send(userId="me", body={"raw": raw}).execute()
+    _service("gmail", "v1").users().messages().send(
+        userId="me", body={"raw": raw}).execute()
 
 
 def calendar_add(summary: str, start_iso: str, end_iso: str,
                  description: str = "", location: str = "") -> str:
     """Zet een afspraak in de agenda. Geeft de link naar het event terug."""
-    from googleapiclient.discovery import build
-
     event = {
         "summary": summary,
         "description": description,
@@ -116,9 +137,87 @@ def calendar_add(summary: str, start_iso: str, end_iso: str,
         "start": {"dateTime": start_iso, "timeZone": TIMEZONE},
         "end": {"dateTime": end_iso, "timeZone": TIMEZONE},
     }
-    svc = build("calendar", "v3", credentials=_google_creds(), cache_discovery=False)
-    ev = svc.events().insert(calendarId="primary", body=event).execute()
+    ev = _service("calendar", "v3").events().insert(
+        calendarId="primary", body=event).execute()
     return ev.get("htmlLink", "")
+
+
+def calendar_events(time_min_iso: str, time_max_iso: str) -> list[dict]:
+    """Haal afspraken op tussen twee tijdstippen (voor context + reminders)."""
+    r = _service("calendar", "v3").events().list(
+        calendarId="primary", timeMin=time_min_iso, timeMax=time_max_iso,
+        singleEvents=True, orderBy="startTime", maxResults=50).execute()
+    return r.get("items", [])
+
+
+def _event_start(e: dict):
+    """Geef de starttijd als tz-aware datetime, of None bij een hele-dag-event."""
+    dt = e.get("start", {}).get("dateTime")
+    if not dt:
+        return None
+    try:
+        return datetime.fromisoformat(dt)
+    except Exception:
+        return None
+
+
+def _fmt_event(e: dict) -> str:
+    summary = e.get("summary", "(geen titel)")
+    start = _event_start(e)
+    if start:
+        return f"{start.astimezone().strftime('%a %d-%m %H:%M')} — {summary}"
+    day = e.get("start", {}).get("date", "?")
+    return f"{day} (hele dag) — {summary}"
+
+
+def build_agenda_context() -> str:
+    """Overzicht van de komende ~14 dagen, zodat Truus 'ben ik druk?' kan beantwoorden."""
+    if not google_enabled():
+        return "(agenda niet gekoppeld)"
+    now = datetime.now(timezone.utc)
+    later = now + timedelta(days=14)
+    try:
+        events = calendar_events(now.isoformat(), later.isoformat())
+    except Exception as e:
+        return f"(agenda ophalen faalde: {e})"
+    if not events:
+        return "Geen afspraken in de komende 14 dagen."
+    return "Komende afspraken:\n" + "\n".join("- " + _fmt_event(e) for e in events)
+
+
+def check_reminders() -> None:
+    """Stuur de dagelijkse agenda-samenvatting en herinneringen ~1 uur vooraf."""
+    if not google_enabled():
+        return
+    now = datetime.now(timezone.utc)
+    local = now.astimezone()
+    events = calendar_events(now.isoformat(), (now + timedelta(days=2)).isoformat())
+
+    # Dagelijkse samenvatting: één keer per dag, na 08:00 lokale tijd.
+    daily_key = f"daily:{local.date().isoformat()}"
+    if 7 <= local.hour <= 10 and not reminder_already_sent(daily_key):
+        todays = [e for e in events
+                  if (_event_start(e) or now).astimezone().date() == local.date()
+                  and _event_start(e)]
+        if todays:
+            msg = "🗓️ *Goedemorgen Ko!* Je afspraken voor vandaag:\n" + \
+                  "\n".join("• " + _fmt_event(e) for e in todays)
+        else:
+            msg = "🗓️ Goedemorgen Ko! Je hebt vandaag geen afspraken in je agenda."
+        send_telegram(msg)
+        mark_reminder_sent(daily_key)
+
+    # Herinnering ~1 uur van tevoren.
+    for e in events:
+        start = _event_start(e)
+        if not start:
+            continue
+        mins = (start - now).total_seconds() / 60
+        key = f"1h:{e.get('id')}"
+        if 0 < mins <= 60 and not reminder_already_sent(key):
+            send_telegram(f"⏰ Over ~{int(round(mins))} min: *{e.get('summary','afspraak')}* "
+                          f"om {start.astimezone().strftime('%H:%M')}.")
+            mark_reminder_sent(key)
 
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")
 CONTEXT_LOOKBACK_HOURS = int(os.getenv("BOT_CONTEXT_HOURS", "120"))  # 5 dagen
@@ -176,8 +275,32 @@ def init_db() -> None:
         ts TEXT NOT NULL,
         role TEXT NOT NULL,
         content TEXT NOT NULL)""")
+    con.execute("""CREATE TABLE IF NOT EXISTS sent_reminders (
+        key TEXT PRIMARY KEY,
+        ts TEXT NOT NULL)""")
     con.commit()
     con.close()
+
+
+def reminder_already_sent(key: str) -> bool:
+    try:
+        con = sqlite3.connect(DB_PATH)
+        row = con.execute("SELECT 1 FROM sent_reminders WHERE key = ?", (key,)).fetchone()
+        con.close()
+        return row is not None
+    except Exception:
+        return False
+
+
+def mark_reminder_sent(key: str) -> None:
+    try:
+        con = sqlite3.connect(DB_PATH)
+        con.execute("INSERT OR IGNORE INTO sent_reminders (key, ts) VALUES (?, ?)",
+                    (key, datetime.now(timezone.utc).isoformat()))
+        con.commit()
+        con.close()
+    except Exception as e:
+        print(f"Reminder-markering faalde: {e}", file=sys.stderr)
 
 
 def load_history(limit: int = HISTORY_LOAD) -> list[dict]:
@@ -370,11 +493,13 @@ SEND_TOOL = {
 }
 
 
-def _build_system(context: str, session_drafts: list[dict]) -> str:
+def _build_system(context: str, agenda: str, session_drafts: list[dict]) -> str:
     now = datetime.now(timezone.utc).astimezone()
     s = (SYSTEM_PROMPT
          + f"\n\nHuidige datum/tijd: {now.strftime('%A %d-%m-%Y %H:%M')} "
          f"({TIMEZONE}). Gebruik dit voor 'morgen', 'volgende week', enz."
+         + "\n\n--- Je agenda (gebruik dit om 'ben ik druk?' te beantwoorden) ---\n"
+         + agenda
          + "\n\n--- Recente mail als context ---\n" + context)
     if session_drafts:
         s += "\n\n--- Concepten die je deze sessie al hebt klaargezet ---\n"
@@ -385,12 +510,12 @@ def _build_system(context: str, session_drafts: list[dict]) -> str:
 
 
 def handle(client: anthropic.Anthropic, history: list[dict], message: str,
-           context: str, session_drafts: list[dict]) -> dict:
+           context: str, agenda: str, session_drafts: list[dict]) -> dict:
     messages = history + [{"role": "user", "content": message}]
     resp = client.messages.create(
         model=CLAUDE_MODEL,
         max_tokens=1500,
-        system=_build_system(context, session_drafts),
+        system=_build_system(context, agenda, session_drafts),
         tools=[DRAFT_TOOL, SEND_TOOL, CALENDAR_TOOL],
         messages=messages,
     )
@@ -410,7 +535,7 @@ def handle(client: anthropic.Anthropic, history: list[dict], message: str,
     return {"reply": reply, "drafts": drafts, "sends": sends, "events": events}
 
 
-def process(client, accounts_by_name, message: str, context: str,
+def process(client, accounts_by_name, message: str, context: str, agenda: str,
             history: list[dict], session_drafts: list[dict]) -> None:
     # Blijf "aan het typen…" tonen zolang Truus bezig is.
     stop = threading.Event()
@@ -423,7 +548,7 @@ def process(client, accounts_by_name, message: str, context: str,
     t = threading.Thread(target=keep_typing, daemon=True)
     t.start()
     try:
-        result = handle(client, history, message, context, session_drafts)
+        result = handle(client, history, message, context, agenda, session_drafts)
     finally:
         stop.set()
 
@@ -513,22 +638,42 @@ def main() -> int:
 
     delete_webhook()  # eventuele oude webhook weg, anders werkt getUpdates niet
 
-    # Mailcontext op de achtergrond bijhouden, zodat een antwoord nooit op IMAP
-    # hoeft te wachten. De thread ververst de context elke paar minuten.
-    ctx = {"text": "(mail wordt geladen…)"}
+    warm_google()  # verbindingen alvast opbouwen zodat de eerste actie snel is
+
+    # Mail- en agenda-context op de achtergrond bijhouden, zodat een antwoord nooit
+    # op IMAP of de agenda hoeft te wachten.
+    ctx = {"mail": "(mail wordt geladen…)", "agenda": "(agenda wordt geladen…)"}
     ctx_lock = threading.Lock()
 
     def refresh_context_loop():
         while True:
             try:
-                new = _format_context(gather_mail_context(accounts))
+                mail = _format_context(gather_mail_context(accounts))
                 with ctx_lock:
-                    ctx["text"] = new
+                    ctx["mail"] = mail
             except Exception as e:
-                print(f"Contextverversing faalde: {e}", file=sys.stderr)
+                print(f"Mailcontext faalde: {e}", file=sys.stderr)
+            try:
+                agenda = build_agenda_context()
+                with ctx_lock:
+                    ctx["agenda"] = agenda
+            except Exception as e:
+                print(f"Agendacontext faalde: {e}", file=sys.stderr)
             time.sleep(CONTEXT_MAX_AGE_S)
 
     threading.Thread(target=refresh_context_loop, daemon=True).start()
+
+    # Reminder-thread: dagelijkse samenvatting + herinnering ~1 uur vooraf.
+    def reminder_loop():
+        while True:
+            try:
+                check_reminders()
+            except Exception as e:
+                print(f"Reminder-check faalde: {e}", file=sys.stderr)
+            time.sleep(120)
+
+    if google_enabled():
+        threading.Thread(target=reminder_loop, daemon=True).start()
 
     init_db()
     start = time.time()
@@ -552,9 +697,10 @@ def main() -> int:
             print(f"[debug] {len(texts)} bericht(en) te verwerken", file=sys.stderr)
         for text in texts:
             with ctx_lock:
-                context = ctx["text"]
+                mail_ctx = ctx["mail"]
+                agenda_ctx = ctx["agenda"]
             try:
-                process(client, accounts_by_name, text, context,
+                process(client, accounts_by_name, text, mail_ctx, agenda_ctx,
                         history, session_drafts)
             except Exception as e:
                 print(f"Verwerken mislukt: {e}", file=sys.stderr)
