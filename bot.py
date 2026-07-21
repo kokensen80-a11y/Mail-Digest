@@ -57,6 +57,69 @@ def send_email(account: Account, to_addr: str, subject: str, body: str) -> None:
         s.login(account.user, account.password)
         s.send_message(msg)
 
+
+# ---------------------------------------------------------------------------
+# Google (Gmail API + Agenda) — werkt via het web, dus geen last van SMTP-blokkade
+# ---------------------------------------------------------------------------
+
+GOOGLE_TOKEN_FILE = os.getenv(
+    "GOOGLE_TOKEN_FILE",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "google_token.json"))
+GOOGLE_SCOPES = ["https://www.googleapis.com/auth/gmail.send",
+                 "https://www.googleapis.com/auth/calendar"]
+TIMEZONE = os.getenv("TRUUS_TZ", "Europe/Amsterdam")
+
+
+def google_enabled() -> bool:
+    return os.path.exists(GOOGLE_TOKEN_FILE)
+
+
+def _google_creds():
+    from google.oauth2.credentials import Credentials
+    with open(GOOGLE_TOKEN_FILE) as f:
+        d = json.load(f)
+    return Credentials(
+        token=None,
+        refresh_token=d["refresh_token"],
+        client_id=d["client_id"],
+        client_secret=d["client_secret"],
+        token_uri="https://oauth2.googleapis.com/token",
+        scopes=GOOGLE_SCOPES,
+    )
+
+
+def gmail_send(to_addr: str, subject: str, body: str, sender: str | None = None) -> None:
+    """Verstuur een mail via de Gmail API (vanuit kokensen80, evt. met alias-afzender)."""
+    import base64
+    from googleapiclient.discovery import build
+
+    msg = EmailMessage()
+    msg["To"] = to_addr
+    msg["Subject"] = subject
+    if sender:
+        msg["From"] = sender
+    msg.set_content(body)
+    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+    svc = build("gmail", "v1", credentials=_google_creds(), cache_discovery=False)
+    svc.users().messages().send(userId="me", body={"raw": raw}).execute()
+
+
+def calendar_add(summary: str, start_iso: str, end_iso: str,
+                 description: str = "", location: str = "") -> str:
+    """Zet een afspraak in de agenda. Geeft de link naar het event terug."""
+    from googleapiclient.discovery import build
+
+    event = {
+        "summary": summary,
+        "description": description,
+        "location": location,
+        "start": {"dateTime": start_iso, "timeZone": TIMEZONE},
+        "end": {"dateTime": end_iso, "timeZone": TIMEZONE},
+    }
+    svc = build("calendar", "v3", credentials=_google_creds(), cache_discovery=False)
+    ev = svc.events().insert(calendarId="primary", body=event).execute()
+    return ev.get("htmlLink", "")
+
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")
 CONTEXT_LOOKBACK_HOURS = int(os.getenv("BOT_CONTEXT_HOURS", "120"))  # 5 dagen
 DB_PATH = os.getenv("TRUUS_DB",
@@ -233,8 +296,10 @@ roep je de tool 'mail_versturen' aan om de mail ECHT te versturen. Verstuur nooi
 zonder die bevestiging, en nooit op eigen initiatief.
    c. Wil Ko de mail liever alleen als concept (niet versturen)? Gebruik dan \
 'concept_klaarzetten'.
-3. Iets dat nog niet kan (bijv. een afspraak in de agenda zetten): leg vriendelijk uit \
-dat die koppeling nog niet actief is.
+3. Afspraken in Ko's Google Agenda zetten met de tool 'agenda_afspraak_toevoegen'. \
+Bevestig kort wat je hebt ingepland (dag, tijd, onderwerp). Vraag door als de tijd of \
+datum onduidelijk is. Gebruik de datum/tijd hieronder om "morgen", "volgende week" enz. \
+correct om te rekenen. Standaard duur van een afspraak is 1 uur tenzij Ko iets anders zegt.
 
 Je onthoudt het lopende gesprek (je krijgt de eerdere berichten mee) plus een lijst van \
 concepten die je deze sessie al hebt klaargezet. Als Ko vraagt "laat dat concept zien" \
@@ -267,6 +332,23 @@ DRAFT_TOOL = {
     },
 }
 
+CALENDAR_TOOL = {
+    "name": "agenda_afspraak_toevoegen",
+    "description": "Zet een afspraak in Ko's Google Agenda. Gebruik ISO-8601 tijden "
+                   "met tijdzone-offset, bijv. 2026-07-22T15:00:00+02:00.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "summary": {"type": "string", "description": "Titel van de afspraak."},
+            "start": {"type": "string", "description": "Starttijd, ISO-8601."},
+            "end": {"type": "string", "description": "Eindtijd, ISO-8601."},
+            "description": {"type": "string"},
+            "location": {"type": "string"},
+        },
+        "required": ["summary", "start", "end"],
+    },
+}
+
 SEND_TOOL = {
     "name": "mail_versturen",
     "description": "Verstuur DIRECT een e-mail vanuit de juiste postbus. Gebruik dit "
@@ -289,7 +371,11 @@ SEND_TOOL = {
 
 
 def _build_system(context: str, session_drafts: list[dict]) -> str:
-    s = SYSTEM_PROMPT + "\n\n--- Recente mail als context ---\n" + context
+    now = datetime.now(timezone.utc).astimezone()
+    s = (SYSTEM_PROMPT
+         + f"\n\nHuidige datum/tijd: {now.strftime('%A %d-%m-%Y %H:%M')} "
+         f"({TIMEZONE}). Gebruik dit voor 'morgen', 'volgende week', enz."
+         + "\n\n--- Recente mail als context ---\n" + context)
     if session_drafts:
         s += "\n\n--- Concepten die je deze sessie al hebt klaargezet ---\n"
         for i, d in enumerate(session_drafts, 1):
@@ -305,18 +391,23 @@ def handle(client: anthropic.Anthropic, history: list[dict], message: str,
         model=CLAUDE_MODEL,
         max_tokens=1500,
         system=_build_system(context, session_drafts),
-        tools=[DRAFT_TOOL, SEND_TOOL],
+        tools=[DRAFT_TOOL, SEND_TOOL, CALENDAR_TOOL],
         messages=messages,
     )
     reply = "".join(b.text for b in resp.content if b.type == "text").strip()
-    drafts = [b.input for b in resp.content
-              if b.type == "tool_use" and b.name == "concept_klaarzetten"]
-    sends = [b.input for b in resp.content
-             if b.type == "tool_use" and b.name == "mail_versturen"]
+
+    def tool_inputs(name):
+        return [b.input for b in resp.content
+                if b.type == "tool_use" and b.name == name]
+
+    drafts = tool_inputs("concept_klaarzetten")
+    sends = tool_inputs("mail_versturen")
+    events = tool_inputs("agenda_afspraak_toevoegen")
     if not reply:
         reply = ("Ik heb een concept voor je klaargezet." if drafts
-                 else "Verstuurd, Ko." if sends else "Genoteerd, Ko.")
-    return {"reply": reply, "drafts": drafts, "sends": sends}
+                 else "Verstuurd, Ko." if sends
+                 else "In je agenda gezet, Ko." if events else "Genoteerd, Ko.")
+    return {"reply": reply, "drafts": drafts, "sends": sends, "events": events}
 
 
 def process(client, accounts_by_name, message: str, context: str,
@@ -341,15 +432,32 @@ def process(client, accounts_by_name, message: str, context: str,
     # Echt versturen (alleen als Truus de mail_versturen-tool aanriep na bevestiging).
     for s in result.get("sends", []):
         acc = accounts_by_name.get(s.get("account"))
-        if not acc or not s.get("to"):
-            reply += f"\n\n⚠️ Kon niet versturen: onbekend account of ontvanger."
+        to = s.get("to")
+        if not to:
+            reply += "\n\n⚠️ Kon niet versturen: geen ontvanger."
             continue
+        sender = acc.user if acc else None
         try:
-            send_email(acc, s["to"], s.get("subject", ""), s.get("body", ""))
-            reply += f"\n\n✅ Verstuurd naar {s['to']} vanuit {acc.user}."
+            if google_enabled():
+                gmail_send(to, s.get("subject", ""), s.get("body", ""), sender=sender)
+            elif acc:
+                send_email(acc, to, s.get("subject", ""), s.get("body", ""))
+            else:
+                raise RuntimeError("geen verzendmethode beschikbaar")
+            reply += f"\n\n✅ Verstuurd naar {to}" + (f" vanuit {sender}." if sender else ".")
         except Exception as e:
             print(f"Versturen mislukt ({s.get('account')}): {e}", file=sys.stderr)
             reply += f"\n\n⚠️ Het versturen lukte niet ({e})."
+
+    # Afspraken in de agenda zetten.
+    for ev in result.get("events", []):
+        try:
+            calendar_add(ev.get("summary", "Afspraak"), ev["start"], ev["end"],
+                         ev.get("description", ""), ev.get("location", ""))
+            reply += f"\n\n📅 In je agenda gezet: {ev.get('summary', 'afspraak')}."
+        except Exception as e:
+            print(f"Agenda toevoegen mislukt: {e}", file=sys.stderr)
+            reply += f"\n\n⚠️ Het inplannen lukte niet ({e})."
 
     saved = []
     for d in result.get("drafts", []):
