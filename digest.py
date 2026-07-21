@@ -315,14 +315,26 @@ def summarize(mails: list[Mail], errors: list[str] | None = None) -> dict:
         messages=[{"role": "user", "content": payload}],
     )
     text = "".join(block.text for block in resp.content if block.type == "text").strip()
-    # Claude kan per ongeluk ```json wrappers meesturen; strip die.
-    if text.startswith("```"):
-        text = text.strip("`")
-        text = text[text.find("{"):]
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        return {"summary_markdown": text, "drafts": []}
+    t = text
+    if t.startswith("```"):
+        t = t.strip("`")
+        if t[:4].lower() == "json":
+            t = t[4:]
+    start, end = t.find("{"), t.rfind("}")
+    if start != -1 and end > start:
+        try:
+            obj = json.loads(t[start:end + 1])
+            if isinstance(obj, dict):
+                obj.setdefault("summary_markdown", "")
+                obj.setdefault("drafts", [])
+                return obj
+        except json.JSONDecodeError:
+            pass
+    # Nooit ruwe JSON dumpen: nette terugval.
+    print(f"[warn] digest-antwoord niet leesbaar als JSON: {text[:300]}", file=sys.stderr)
+    return {"summary_markdown": "Goedemorgen Ko,\n\nEr kwam net iets tussen bij het "
+            "opmaken van je overzicht. Ik probeer het bij de volgende ronde opnieuw.\n\n"
+            "Fijne dag,\nKo", "drafts": []}
 
 
 # ---------------------------------------------------------------------------

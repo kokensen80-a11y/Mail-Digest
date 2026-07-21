@@ -186,14 +186,36 @@ def handle(client: anthropic.Anthropic, message: str, context: str) -> dict:
         messages=[{"role": "user", "content": payload}],
     )
     text = "".join(b.text for b in resp.content if b.type == "text").strip()
-    if text.startswith("```"):
-        text = text.strip("`")
-        text = text[text.find("{"):]
+    parsed = _parse_json(text)
+    if parsed is None:
+        # Nooit ruwe JSON of rommel dumpen; vriendelijk terugvallen.
+        print(f"[warn] kon antwoord niet als JSON lezen: {text[:300]}", file=sys.stderr)
+        return {"reply": "Sorry Ko, ik verwerkte dat even verkeerd. "
+                         "Kun je het nog een keer sturen?", "drafts": []}
+    parsed.setdefault("reply", "")
+    parsed.setdefault("drafts", [])
+    return parsed
+
+
+def _parse_json(text: str) -> dict | None:
+    """Haal het JSON-object uit Claude's antwoord, robuust tegen fences/extra tekst."""
+    if not text:
+        return None
+    t = text.strip()
+    if t.startswith("```"):
+        t = t.strip("`")
+        if t[:4].lower() == "json":
+            t = t[4:]
+    # Neem het stuk van de eerste { tot de laatste }.
+    start, end = t.find("{"), t.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        return None
+    candidate = t[start:end + 1]
     try:
-        return json.loads(text)
+        obj = json.loads(candidate)
+        return obj if isinstance(obj, dict) else None
     except json.JSONDecodeError:
-        return {"reply": text or "Sorry Ko, dat ging even mis. Probeer 't nog eens.",
-                "drafts": []}
+        return None
 
 
 def process(client, accounts_by_name, message: str, context: str) -> None:
