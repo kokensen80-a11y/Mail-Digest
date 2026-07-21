@@ -154,34 +154,47 @@ Nederlands. Je krijgt Ko's recente mail als context, zodat je kunt verwijzen naa
 concrete berichten ("de mail van Jan"). Reageer natuurlijk, alsof je samen aan het \
 appen bent.
 
+Antwoord altijd gewoon in natuurlijke taal — je hoeft geen JSON of speciale opmaak te \
+gebruiken. Praat als een mens.
+
 Je kunt:
-1. Een vraag beantwoorden of iets uitzoeken/samenvatten uit de mailcontext.
-2. Een concept-antwoord of nieuwe mail klaarzetten (in 'drafts'). Verstuur NOOIT zelf \
-een mail — je zet een concept klaar en Ko verstuurt het met één tik. Zeg in 'reply' \
-duidelijk dat het als concept klaarstaat en in welk account.
+1. Vragen beantwoorden of iets uitzoeken/samenvatten uit de mailcontext.
+2. Een concept-antwoord of nieuwe mail klaarzetten. Gebruik daarvoor de tool \
+'concept_klaarzetten'. Verstuur NOOIT zelf een mail — je zet alleen een concept klaar \
+en Ko verstuurt het met één tik. Vertel in je antwoord kort dat het concept klaarstaat.
 3. Iets dat nog niet kan (bijv. een afspraak in de agenda zetten): leg vriendelijk uit \
 dat die koppeling nog niet actief is.
 
-Je onthoudt het lopende gesprek: je krijgt de eerdere berichten mee, plus een lijst \
-van concepten die je deze sessie al hebt klaargezet. Als Ko vraagt "laat dat concept \
-zien" of "wat had je geschreven", toon dan gewoon de tekst van het betreffende concept \
-uit die lijst in je 'reply'. Maak niet onnodig een nieuw concept aan als er al één is \
-dat Ko bedoelt.
+Je onthoudt het lopende gesprek (je krijgt de eerdere berichten mee) plus een lijst van \
+concepten die je deze sessie al hebt klaargezet. Als Ko vraagt "laat dat concept zien" \
+of "wat had je geschreven", toon dan gewoon de tekst van het betreffende concept uit die \
+lijst. Maak niet onnodig een nieuw concept aan als er al één is dat Ko bedoelt.
 
 ROUTERING van concepten: is het zakelijk (klant, opdracht, offerte, leverancier, \
 factuur, Kodesaign)? Zet 'account' dan op "Kodesaign" (verstuurt vanuit \
 info@kodesaign.com). Privé? Gebruik "Gmail privé" of "Gmail studio", afhankelijk van \
-waar de oorspronkelijke mail binnenkwam.
+waar de oorspronkelijke mail binnenkwam."""
 
-Antwoord UITSLUITEND met geldige JSON:
-{
-  "reply": "<kort, menselijk Telegram-antwoord aan Ko>",
-  "drafts": [
-    {"account": "Kodesaign | Gmail privé | Gmail studio", "to": "<e-mailadres>", \
-"subject": "<onderwerp>", "body": "<concept-tekst>"}
-  ]
+
+DRAFT_TOOL = {
+    "name": "concept_klaarzetten",
+    "description": "Zet een concept-mail klaar in de Concepten-map van de juiste "
+                   "postbus. Gebruik dit alleen als Ko een mail wil (laten) opstellen "
+                   "of beantwoorden. De mail wordt NIET verstuurd, alleen als concept "
+                   "klaargezet zodat Ko 'm zelf kan nakijken en versturen.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "account": {"type": "string",
+                        "enum": ["Kodesaign", "Gmail privé", "Gmail studio"],
+                        "description": "Zakelijk -> Kodesaign; privé -> het Gmail-account."},
+            "to": {"type": "string", "description": "E-mailadres van de ontvanger."},
+            "subject": {"type": "string"},
+            "body": {"type": "string", "description": "De volledige concept-tekst."},
+        },
+        "required": ["account", "to", "subject", "body"],
+    },
 }
-Laat 'drafts' leeg ([]) als er niks klaargezet hoeft te worden. Geen tekst buiten de JSON."""
 
 
 def _build_system(context: str, session_drafts: list[dict]) -> str:
@@ -201,39 +214,16 @@ def handle(client: anthropic.Anthropic, history: list[dict], message: str,
         model=CLAUDE_MODEL,
         max_tokens=1500,
         system=_build_system(context, session_drafts),
+        tools=[DRAFT_TOOL],
         messages=messages,
     )
-    text = "".join(b.text for b in resp.content if b.type == "text").strip()
-    parsed = _parse_json(text)
-    if parsed is None:
-        # Nooit ruwe JSON of rommel dumpen; vriendelijk terugvallen.
-        print(f"[warn] kon antwoord niet als JSON lezen: {text[:300]}", file=sys.stderr)
-        return {"reply": "Sorry Ko, ik verwerkte dat even verkeerd. "
-                         "Kun je het nog een keer sturen?", "drafts": []}
-    parsed.setdefault("reply", "")
-    parsed.setdefault("drafts", [])
-    return parsed
-
-
-def _parse_json(text: str) -> dict | None:
-    """Haal het JSON-object uit Claude's antwoord, robuust tegen fences/extra tekst."""
-    if not text:
-        return None
-    t = text.strip()
-    if t.startswith("```"):
-        t = t.strip("`")
-        if t[:4].lower() == "json":
-            t = t[4:]
-    # Neem het stuk van de eerste { tot de laatste }.
-    start, end = t.find("{"), t.rfind("}")
-    if start == -1 or end == -1 or end <= start:
-        return None
-    candidate = t[start:end + 1]
-    try:
-        obj = json.loads(candidate)
-        return obj if isinstance(obj, dict) else None
-    except json.JSONDecodeError:
-        return None
+    reply = "".join(b.text for b in resp.content if b.type == "text").strip()
+    drafts = [b.input for b in resp.content
+              if b.type == "tool_use" and b.name == "concept_klaarzetten"]
+    if not reply:
+        reply = ("Ik heb een concept voor je klaargezet." if drafts
+                 else "Genoteerd, Ko.")
+    return {"reply": reply, "drafts": drafts}
 
 
 def process(client, accounts_by_name, message: str, context: str,
@@ -307,11 +297,26 @@ def main() -> int:
 
     delete_webhook()  # eventuele oude webhook weg, anders werkt getUpdates niet
 
+    # Mailcontext op de achtergrond bijhouden, zodat een antwoord nooit op IMAP
+    # hoeft te wachten. De thread ververst de context elke paar minuten.
+    ctx = {"text": "(mail wordt geladen…)"}
+    ctx_lock = threading.Lock()
+
+    def refresh_context_loop():
+        while True:
+            try:
+                new = _format_context(gather_mail_context(accounts))
+                with ctx_lock:
+                    ctx["text"] = new
+            except Exception as e:
+                print(f"Contextverversing faalde: {e}", file=sys.stderr)
+            time.sleep(CONTEXT_MAX_AGE_S)
+
+    threading.Thread(target=refresh_context_loop, daemon=True).start()
+
     start = time.time()
     offset: int | None = None
     skip_before = time.time() - STARTUP_SKIP_OLDER_S  # bij start oude appjes negeren
-    context = "(nog niet geladen)"
-    context_ts = 0.0
     history: list[dict] = []          # gespreksgeheugen (deze sessie)
     session_drafts: list[dict] = []   # concepten die deze sessie zijn klaargezet
 
@@ -329,9 +334,8 @@ def main() -> int:
         if DEBUG and texts:
             print(f"[debug] {len(texts)} bericht(en) te verwerken", file=sys.stderr)
         for text in texts:
-            if time.time() - context_ts > CONTEXT_MAX_AGE_S:
-                context = _format_context(gather_mail_context(accounts))
-                context_ts = time.time()
+            with ctx_lock:
+                context = ctx["text"]
             try:
                 process(client, accounts_by_name, text, context,
                         history, session_drafts)
