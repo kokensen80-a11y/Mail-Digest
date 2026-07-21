@@ -142,12 +142,54 @@ def calendar_add(summary: str, start_iso: str, end_iso: str,
     return ev.get("htmlLink", "")
 
 
+def calendar_delete(event_id: str) -> None:
+    """Verwijder een afspraak uit de agenda op basis van het event-id."""
+    _service("calendar", "v3").events().delete(
+        calendarId="primary", eventId=event_id).execute()
+
+
 def calendar_events(time_min_iso: str, time_max_iso: str) -> list[dict]:
     """Haal afspraken op tussen twee tijdstippen (voor context + reminders)."""
     r = _service("calendar", "v3").events().list(
         calendarId="primary", timeMin=time_min_iso, timeMax=time_max_iso,
         singleEvents=True, orderBy="startTime", maxResults=50).execute()
     return r.get("items", [])
+
+
+def _list_calendars() -> list[str]:
+    try:
+        r = _service("calendar", "v3").calendarList().list().execute()
+        return [c["id"] for c in r.get("items", [])]
+    except Exception:
+        return ["primary"]
+
+
+def calendar_all_events(time_min_iso: str, time_max_iso: str) -> list[dict]:
+    """Afspraken uit ALLE agenda's (incl. verjaardagen-agenda)."""
+    out = []
+    for cid in _list_calendars():
+        try:
+            r = _service("calendar", "v3").events().list(
+                calendarId=cid, timeMin=time_min_iso, timeMax=time_max_iso,
+                singleEvents=True, orderBy="startTime", maxResults=50).execute()
+            for e in r.get("items", []):
+                e["_cal"] = cid
+                out.append(e)
+        except Exception:
+            continue
+    return out
+
+
+def _is_birthday(e: dict) -> bool:
+    if e.get("eventType") == "birthday":
+        return True
+    if not e.get("start", {}).get("date"):  # alleen hele-dag-events
+        return False
+    s = (e.get("summary") or "").lower()
+    cal = (e.get("_cal") or "").lower()
+    if any(k in s for k in ("verjaardag", "jarig", "birthday", "🎂")):
+        return True
+    return "birthday" in cal or "contacts" in cal
 
 
 def _event_start(e: dict):
@@ -182,7 +224,9 @@ def build_agenda_context() -> str:
         return f"(agenda ophalen faalde: {e})"
     if not events:
         return "Geen afspraken in de komende 14 dagen."
-    return "Komende afspraken:\n" + "\n".join("- " + _fmt_event(e) for e in events)
+    # De [id:...] gebruik je om een afspraak te verwijderen; noem het id niet tegen Ko.
+    return "Komende afspraken:\n" + "\n".join(
+        f"- [id:{e.get('id')}] {_fmt_event(e)}" for e in events)
 
 
 def check_reminders() -> None:
@@ -219,6 +263,30 @@ def check_reminders() -> None:
                           f"om {start.astimezone().strftime('%H:%M')}.")
             mark_reminder_sent(key)
 
+    # Verjaardagen: één week van tevoren (scan één keer per ochtend).
+    scan_key = f"bdayscan:{local.date().isoformat()}"
+    if 7 <= local.hour <= 10 and not reminder_already_sent(scan_key):
+        target = local.date() + timedelta(days=7)
+        day_start = datetime(target.year, target.month, target.day,
+                             tzinfo=local.tzinfo)
+        try:
+            bdays = calendar_all_events(
+                day_start.astimezone(timezone.utc).isoformat(),
+                (day_start + timedelta(days=1)).astimezone(timezone.utc).isoformat())
+        except Exception as e:
+            bdays = []
+            print(f"Verjaardag-scan faalde: {e}", file=sys.stderr)
+        for e in bdays:
+            if _is_birthday(e):
+                bkey = f"bday:{e.get('id')}:{target.isoformat()}"
+                if not reminder_already_sent(bkey):
+                    send_telegram(
+                        f"🎂 Over een week ({target.strftime('%d-%m')}) is "
+                        f"*{e.get('summary', 'een verjaardag')}*. Denk je aan een "
+                        f"kaartje of cadeautje?")
+                    mark_reminder_sent(bkey)
+        mark_reminder_sent(scan_key)
+
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")
 CONTEXT_LOOKBACK_HOURS = int(os.getenv("BOT_CONTEXT_HOURS", "120"))  # 5 dagen
 DB_PATH = os.getenv("TRUUS_DB",
@@ -227,7 +295,7 @@ DB_PATH = os.getenv("TRUUS_DB",
 HISTORY_LOAD = 40   # hoeveel eerdere berichten Truus als geheugen meeneemt
 ON_VPS = not os.getenv("GITHUB_REPOSITORY")  # op de VPS draait ze onbeperkt door
 CONTEXT_MAX_AGE_S = 180        # mailcontext maximaal 3 min hergebruiken
-MAX_CONTEXT_MAILS = 40
+MAX_CONTEXT_MAILS = 18         # kleinere context = sneller antwoord
 LONGPOLL_TIMEOUT = 50          # seconden dat Telegram de verbinding openhoudt
 SESSION_BUDGET_S = int(os.getenv("BOT_BUDGET_SECONDS") or "20400")  # ~5u40m
 STARTUP_SKIP_OLDER_S = 900     # bij (her)start: berichten ouder dan 15 min overslaan
@@ -390,7 +458,7 @@ def _format_context(mails: list[Mail]) -> str:
         when = m.date.strftime("%d-%m %H:%M") if m.date else "?"
         lines.append(
             f"[{i}] Account: {m.account} | Van: {m.sender} | {when}\n"
-            f"    Onderwerp: {m.subject}\n    Tekst: {m.body[:600]}"
+            f"    Onderwerp: {m.subject}\n    Tekst: {m.body[:300]}"
         )
     return "\n".join(lines)
 
@@ -419,10 +487,15 @@ roep je de tool 'mail_versturen' aan om de mail ECHT te versturen. Verstuur nooi
 zonder die bevestiging, en nooit op eigen initiatief.
    c. Wil Ko de mail liever alleen als concept (niet versturen)? Gebruik dan \
 'concept_klaarzetten'.
-3. Afspraken in Ko's Google Agenda zetten met de tool 'agenda_afspraak_toevoegen'. \
-Bevestig kort wat je hebt ingepland (dag, tijd, onderwerp). Vraag door als de tijd of \
-datum onduidelijk is. Gebruik de datum/tijd hieronder om "morgen", "volgende week" enz. \
-correct om te rekenen. Standaard duur van een afspraak is 1 uur tenzij Ko iets anders zegt.
+3. Ko's Google Agenda beheren:
+   - Afspraak toevoegen met 'agenda_afspraak_toevoegen'.
+   - Afspraak verwijderen met 'agenda_afspraak_verwijderen' (gebruik het [id:...] uit het \
+agenda-overzicht hieronder). Als Ko zegt "haal de afspraak van morgen eruit", zoek de \
+betreffende afspraak in het overzicht en verwijder die.
+   - Vragen als "ben ik dinsdag druk?" beantwoord je aan de hand van het agenda-overzicht.
+   Bevestig kort wat je deed. Gebruik de datum/tijd hieronder om "morgen", "volgende week" \
+enz. correct om te rekenen. Standaardduur van een afspraak is 1 uur tenzij Ko iets \
+anders zegt.
 
 Je onthoudt het lopende gesprek (je krijgt de eerdere berichten mee) plus een lijst van \
 concepten die je deze sessie al hebt klaargezet. Als Ko vraagt "laat dat concept zien" \
@@ -472,6 +545,20 @@ CALENDAR_TOOL = {
     },
 }
 
+DELETE_EVENT_TOOL = {
+    "name": "agenda_afspraak_verwijderen",
+    "description": "Verwijder een afspraak uit de agenda. Gebruik het event_id dat "
+                   "tussen [id:...] in het agenda-overzicht staat. Verwijder alleen de "
+                   "afspraak die Ko duidelijk bedoelt; twijfel je welke, vraag het na.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "event_id": {"type": "string", "description": "Het id uit [id:...]."},
+        },
+        "required": ["event_id"],
+    },
+}
+
 SEND_TOOL = {
     "name": "mail_versturen",
     "description": "Verstuur DIRECT een e-mail vanuit de juiste postbus. Gebruik dit "
@@ -516,7 +603,7 @@ def handle(client: anthropic.Anthropic, history: list[dict], message: str,
         model=CLAUDE_MODEL,
         max_tokens=1500,
         system=_build_system(context, agenda, session_drafts),
-        tools=[DRAFT_TOOL, SEND_TOOL, CALENDAR_TOOL],
+        tools=[DRAFT_TOOL, SEND_TOOL, CALENDAR_TOOL, DELETE_EVENT_TOOL],
         messages=messages,
     )
     reply = "".join(b.text for b in resp.content if b.type == "text").strip()
@@ -528,11 +615,14 @@ def handle(client: anthropic.Anthropic, history: list[dict], message: str,
     drafts = tool_inputs("concept_klaarzetten")
     sends = tool_inputs("mail_versturen")
     events = tool_inputs("agenda_afspraak_toevoegen")
+    deletes = tool_inputs("agenda_afspraak_verwijderen")
     if not reply:
         reply = ("Ik heb een concept voor je klaargezet." if drafts
                  else "Verstuurd, Ko." if sends
-                 else "In je agenda gezet, Ko." if events else "Genoteerd, Ko.")
-    return {"reply": reply, "drafts": drafts, "sends": sends, "events": events}
+                 else "In je agenda gezet, Ko." if events
+                 else "Uit je agenda gehaald, Ko." if deletes else "Genoteerd, Ko.")
+    return {"reply": reply, "drafts": drafts, "sends": sends,
+            "events": events, "deletes": deletes}
 
 
 def process(client, accounts_by_name, message: str, context: str, agenda: str,
@@ -583,6 +673,15 @@ def process(client, accounts_by_name, message: str, context: str, agenda: str,
         except Exception as e:
             print(f"Agenda toevoegen mislukt: {e}", file=sys.stderr)
             reply += f"\n\n⚠️ Het inplannen lukte niet ({e})."
+
+    # Afspraken verwijderen.
+    for d in result.get("deletes", []):
+        try:
+            calendar_delete(d["event_id"])
+            reply += "\n\n🗑️ Uit je agenda gehaald."
+        except Exception as e:
+            print(f"Agenda verwijderen mislukt: {e}", file=sys.stderr)
+            reply += f"\n\n⚠️ Het verwijderen lukte niet ({e})."
 
     saved = []
     for d in result.get("drafts", []):
