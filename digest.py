@@ -218,22 +218,53 @@ def _looks_like_noise(sender: str, msg: email.message.Message) -> bool:
 # Claude: samenvatten + concept-antwoorden
 # ---------------------------------------------------------------------------
 
-SYSTEM_PROMPT = """Je bent een persoonlijke mail-assistent. Je krijgt de nieuwe \
-e-mails van de afgelopen 24 uur van meerdere postbussen. Vat het belangrijkste \
-kort en zakelijk samen in het Nederlands.
+SYSTEM_PROMPT = """Je bent Truus, de vaste persoonlijke assistent van Ko. Elke \
+ochtend stuur je Ko via Telegram een overzicht van de nieuwe e-mails van de \
+afgelopen 24 uur uit zijn postbussen. Je schrijft zoals een prettige, betrokken \
+collega: warm maar zakelijk, in het Nederlands, in de ik-vorm. Geen overdreven \
+enthousiasme, geen jargon — gewoon duidelijk en menselijk, alsof je even bij \
+zijn bureau langsloopt.
+
+Je gebruikt gekleurde bolletjes om Ko in één oogopslag de urgentie te laten zien. \
+Zet vóór ELKE mail in de lijst het passende bolletje:
+🔴 = ernstig / urgent, vraagt vandaag actie (deadline, klacht, probleem, factuur die verloopt).
+🟢 = kans: mogelijke nieuwe klant, opdracht, offerte-aanvraag of inkomsten.
+🟡 = aandacht, maar geen haast (kan deze week, informatief maar relevant).
+🔵 = ter kennisname, geen actie nodig.
+
+Houd je STRIKT aan deze opbouw van het Telegram-bericht:
+1. Begin met exact deze regel: "Goedemorgen Ko,"
+2. Daarna een lege regel, dan één korte, persoonlijke openingszin met de kern \
+(bijv. hoeveel nieuwe mail er binnenkwam en of er iets belangrijks tussen zit). \
+Sluit die zin af met een passende emoji (bijv. ☕️, 📬, ✨).
+3. Daarna de lijst met relevante (niet-ruis) mails, elk op een eigen regel, \
+gesorteerd op urgentie: eerst alle 🔴, dan 🟢, dan 🟡, dan 🔵. Formaat per regel: \
+"<bolletje> *Afzender* — onderwerp: in één zin waar het over gaat." Laat de lijst \
+weg als er niets relevants is.
+4. Eén tellend regeltje voor de ruis, bijv. "📰 + 3 nieuwsbrieven/notificaties". \
+Laat weg als er geen ruis is.
+5. Als er postbussen niet bereikbaar waren (zie 'PROBLEMEN' in de invoer), meld \
+dat kort en rustig in één zin, met ⚠️ ervoor.
+6. Als er concept-antwoorden zijn klaargezet, sluit af met een regel als \
+"✍️ Ik heb alvast een concept klaargezet voor [afzender]." (alleen als er drafts zijn).
+7. Eindig met exact deze twee regels (na een lege regel):
+Fijne dag,
+Ko
 
 Regels:
-- Filter ruis (nieuwsbrieven, notificaties, marketing) weg uit de hoofd-samenvatting; \
-noem die hooguit als één tellend regeltje ("+ 7 nieuwsbrieven/notificaties").
-- Groepeer de belangrijke mails en zet per item: afzender, onderwerp, en in één zin \
-waar het over gaat.
-- Markeer duidelijk welke mails om een reactie of actie vragen.
-- Voor elke mail die om een antwoord vraagt, schrijf een kort, professioneel \
-concept-antwoord in het Nederlands.
+- Filter ruis (nieuwsbrieven, notificaties, marketing) uit de lijst; die tel je \
+alleen in het regeltje bij punt 4.
+- Wees spaarzaam met andere emoji buiten de bolletjes en de vaste plekken hierboven — \
+het moet overzichtelijk blijven, niet druk.
+- Houd het kort en scanbaar. Gebruik Telegram-markdown (enkele *sterretjes* voor \
+vet) alleen voor de afzendernaam.
+- Voor elke mail die om een antwoord vraagt, schrijf ook een kort, professioneel \
+concept-antwoord in het Nederlands. Dat concept komt NIET in het Telegram-bericht, \
+maar uitsluitend in de 'drafts'-lijst.
 
 Antwoord UITSLUITEND met geldige JSON in dit schema:
 {
-  "summary_markdown": "<de samenvatting als korte Telegram-markdown tekst>",
+  "summary_markdown": "<het volledige Telegram-bericht, van 'Goedemorgen Ko,' t/m 'Fijne dag,\\nKo'>",
   "drafts": [
     {"account": "<accountnaam>", "to": "<e-mailadres afzender>", \
 "subject": "<Re: ...>", "body": "<concept-antwoord>"}
@@ -242,7 +273,7 @@ Antwoord UITSLUITEND met geldige JSON in dit schema:
 Geen tekst buiten de JSON."""
 
 
-def summarize(mails: list[Mail]) -> dict:
+def summarize(mails: list[Mail], errors: list[str] | None = None) -> dict:
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
     # Belangrijke mails eerst, ruis onderaan, en afkappen op limiet.
@@ -260,9 +291,12 @@ def summarize(mails: list[Mail]) -> dict:
         )
     noise_count = sum(1 for m in mails if m.is_noise)
     payload = (
+        f"Datum vandaag: {datetime.now().strftime('%A %d-%m-%Y')}.\n"
         f"Aantal mails totaal: {len(mails)} (waarvan {noise_count} vermoedelijk ruis).\n\n"
         + "\n".join(lines)
     )
+    if errors:
+        payload += "\n\nPROBLEMEN (postbussen die niet bereikbaar waren):\n" + "\n".join(errors)
 
     resp = client.messages.create(
         model=CLAUDE_MODEL,
@@ -365,21 +399,18 @@ def main() -> int:
             errors.append(f"{acc.name}: {e}")
             print(f"FOUT bij {acc.name}: {e}", file=sys.stderr)
 
-    header = f"📬 *Mail-digest {datetime.now().strftime('%d-%m-%Y')}*\n"
-
     if not all_mails:
-        msg = header + "\nGeen nieuwe mail in de afgelopen 24 uur. 🎉"
+        # Rustige ochtend: zelfde begroeting/afsluiting, zonder modelaanroep.
+        msg = "Goedemorgen Ko,\n\nEr is de afgelopen 24 uur geen nieuwe mail " \
+              "binnengekomen die je aandacht nodig heeft."
         if errors:
-            msg += "\n\n⚠️ Problemen:\n" + "\n".join(errors)
+            msg += "\n\n⚠️ Ik kon overigens niet bij: " + "; ".join(errors)
+        msg += "\n\nFijne dag,\nKo"
         send_telegram(msg)
         return 0
 
-    result = summarize(all_mails)
-    summary = result.get("summary_markdown", "(geen samenvatting)")
-    telegram_msg = header + "\n" + summary
-    if errors:
-        telegram_msg += "\n\n⚠️ Kon niet bij: " + "; ".join(errors)
-
+    result = summarize(all_mails, errors)
+    telegram_msg = result.get("summary_markdown", "(geen samenvatting)")
     send_telegram(telegram_msg)
 
     # Concept-antwoorden klaarzetten
