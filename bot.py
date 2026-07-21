@@ -22,6 +22,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -161,6 +162,12 @@ duidelijk dat het als concept klaarstaat en in welk account.
 3. Iets dat nog niet kan (bijv. een afspraak in de agenda zetten): leg vriendelijk uit \
 dat die koppeling nog niet actief is.
 
+Je onthoudt het lopende gesprek: je krijgt de eerdere berichten mee, plus een lijst \
+van concepten die je deze sessie al hebt klaargezet. Als Ko vraagt "laat dat concept \
+zien" of "wat had je geschreven", toon dan gewoon de tekst van het betreffende concept \
+uit die lijst in je 'reply'. Maak niet onnodig een nieuw concept aan als er al één is \
+dat Ko bedoelt.
+
 ROUTERING van concepten: is het zakelijk (klant, opdracht, offerte, leverancier, \
 factuur, Kodesaign)? Zet 'account' dan op "Kodesaign" (verstuurt vanuit \
 info@kodesaign.com). Privé? Gebruik "Gmail privé" of "Gmail studio", afhankelijk van \
@@ -177,13 +184,24 @@ Antwoord UITSLUITEND met geldige JSON:
 Laat 'drafts' leeg ([]) als er niks klaargezet hoeft te worden. Geen tekst buiten de JSON."""
 
 
-def handle(client: anthropic.Anthropic, message: str, context: str) -> dict:
-    payload = f"Ko's bericht:\n{message}\n\n--- Recente mail als context ---\n{context}"
+def _build_system(context: str, session_drafts: list[dict]) -> str:
+    s = SYSTEM_PROMPT + "\n\n--- Recente mail als context ---\n" + context
+    if session_drafts:
+        s += "\n\n--- Concepten die je deze sessie al hebt klaargezet ---\n"
+        for i, d in enumerate(session_drafts, 1):
+            s += (f"{i}. account={d.get('account')} aan={d.get('to')} "
+                  f"onderwerp={d.get('subject')}\n   tekst: {d.get('body')}\n")
+    return s
+
+
+def handle(client: anthropic.Anthropic, history: list[dict], message: str,
+           context: str, session_drafts: list[dict]) -> dict:
+    messages = history + [{"role": "user", "content": message}]
     resp = client.messages.create(
         model=CLAUDE_MODEL,
         max_tokens=1500,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": payload}],
+        system=_build_system(context, session_drafts),
+        messages=messages,
     )
     text = "".join(b.text for b in resp.content if b.type == "text").strip()
     parsed = _parse_json(text)
@@ -218,9 +236,23 @@ def _parse_json(text: str) -> dict | None:
         return None
 
 
-def process(client, accounts_by_name, message: str, context: str) -> None:
-    send_typing()  # laat meteen "Truus is aan het typen…" zien
-    result = handle(client, message, context)
+def process(client, accounts_by_name, message: str, context: str,
+            history: list[dict], session_drafts: list[dict]) -> None:
+    # Blijf "aan het typen…" tonen zolang Truus bezig is.
+    stop = threading.Event()
+
+    def keep_typing():
+        while not stop.is_set():
+            send_typing()
+            stop.wait(4)
+
+    t = threading.Thread(target=keep_typing, daemon=True)
+    t.start()
+    try:
+        result = handle(client, history, message, context, session_drafts)
+    finally:
+        stop.set()
+
     reply = (result.get("reply") or "").strip() or "Genoteerd, Ko."
 
     saved = []
@@ -231,6 +263,7 @@ def process(client, accounts_by_name, message: str, context: str) -> None:
         try:
             save_draft(acc, d["to"], d.get("subject", "Re:"), d.get("body", ""))
             saved.append(acc.user)
+            session_drafts.append(d)  # onthoud voor later ("laat zien")
         except Exception as e:
             print(f"Concept opslaan mislukt ({d.get('account')}): {e}", file=sys.stderr)
             reply += f"\n\n⚠️ Het concept opslaan lukte niet ({d.get('account')})."
@@ -238,6 +271,11 @@ def process(client, accounts_by_name, message: str, context: str) -> None:
         reply += f"\n\n✍️ Concept klaargezet in: {', '.join(dict.fromkeys(saved))}."
 
     send_telegram(reply)
+
+    # Gespreksgeheugen bijwerken (laatste ~24 berichten bewaren).
+    history.append({"role": "user", "content": message})
+    history.append({"role": "assistant", "content": reply})
+    del history[:-24]
 
 
 # ---------------------------------------------------------------------------
@@ -274,6 +312,8 @@ def main() -> int:
     skip_before = time.time() - STARTUP_SKIP_OLDER_S  # bij start oude appjes negeren
     context = "(nog niet geladen)"
     context_ts = 0.0
+    history: list[dict] = []          # gespreksgeheugen (deze sessie)
+    session_drafts: list[dict] = []   # concepten die deze sessie zijn klaargezet
 
     print(f"Truus luistert live... (debug={DEBUG}, budget={SESSION_BUDGET_S}s)",
           file=sys.stderr)
@@ -293,7 +333,8 @@ def main() -> int:
                 context = _format_context(gather_mail_context(accounts))
                 context_ts = time.time()
             try:
-                process(client, accounts_by_name, text, context)
+                process(client, accounts_by_name, text, context,
+                        history, session_drafts)
             except Exception as e:
                 print(f"Verwerken mislukt: {e}", file=sys.stderr)
                 try:
