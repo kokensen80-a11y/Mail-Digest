@@ -343,7 +343,8 @@ def check_reminders() -> None:
 
     # Dagelijkse samenvatting: één keer per dag, na 08:00 lokale tijd.
     daily_key = f"daily:{local.date().isoformat()}"
-    if 7 <= local.hour <= 10 and not reminder_already_sent(daily_key):
+    if (feature_on("dagelijkse_brief") and 7 <= local.hour <= 10
+            and not reminder_already_sent(daily_key)):
         todays = [e for e in events
                   if (_event_start(e) or now).astimezone(LOCAL_TZ).date() == local.date()
                   and _event_start(e)]
@@ -356,7 +357,7 @@ def check_reminders() -> None:
         mark_reminder_sent(daily_key)
 
     # Herinnering ~1 uur van tevoren.
-    for e in events:
+    for e in events if feature_on("herinnering_1u") else []:
         start = _event_start(e)
         if not start:
             continue
@@ -369,7 +370,8 @@ def check_reminders() -> None:
 
     # Verjaardagen: één week van tevoren (scan één keer per ochtend).
     scan_key = f"bdayscan:{local.date().isoformat()}"
-    if 7 <= local.hour <= 10 and not reminder_already_sent(scan_key):
+    if (feature_on("verjaardagen") and 7 <= local.hour <= 10
+            and not reminder_already_sent(scan_key)):
         target = local.date() + timedelta(days=7)
         day_start = datetime(target.year, target.month, target.day,
                              tzinfo=local.tzinfo)
@@ -394,6 +396,8 @@ def check_reminders() -> None:
 
 def check_todos() -> None:
     """Herinner aan taken waarvan de deadline (bijna) is bereikt."""
+    if not feature_on("taken"):
+        return
     today = datetime.now(LOCAL_TZ).date().isoformat()
     con = sqlite3.connect(DB_PATH)
     rows = con.execute(
@@ -408,6 +412,8 @@ def check_todos() -> None:
 
 def check_followups(accounts) -> None:
     """Follow-up radar: por Ko over mails waar nog geen antwoord op kwam."""
+    if not feature_on("followup_radar"):
+        return
     now = datetime.now(timezone.utc)
     due = [f for f in followup_list_open()
            if datetime.fromisoformat(f["remind_after"]) <= now]
@@ -509,8 +515,56 @@ def init_db() -> None:
         remind_after TEXT NOT NULL,
         done INTEGER DEFAULT 0,
         nudged INTEGER DEFAULT 0)""")
+    con.execute("""CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL)""")
     con.commit()
     con.close()
+
+
+# --- Functie-schakelaars (aan/uit per feature) -----------------------------
+
+# Alle schakelbare functies (standaard aan). De toekomstige app leest/schrijft
+# dezelfde tabel, dus de knopjes daar werken meteen op deze instellingen.
+FEATURES = {
+    "dagelijkse_brief": "Dagelijkse ochtend-samenvatting van je agenda",
+    "herinnering_1u": "Herinnering ~1 uur voor een afspraak",
+    "verjaardagen": "Verjaardagen een week van tevoren",
+    "taken": "Herinneringen voor taken met een deadline",
+    "followup_radar": "Automatisch volgen of er antwoord komt op je mails",
+}
+
+
+def _get_setting(key: str, default: str | None = None) -> str | None:
+    try:
+        con = sqlite3.connect(DB_PATH)
+        row = con.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        con.close()
+        return row[0] if row else default
+    except Exception:
+        return default
+
+
+def _set_setting(key: str, value: str) -> None:
+    con = sqlite3.connect(DB_PATH)
+    con.execute("INSERT INTO settings (key, value) VALUES (?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value", (key, value))
+    con.commit()
+    con.close()
+
+
+def feature_on(key: str) -> bool:
+    return _get_setting(f"feat:{key}", "1") != "0"
+
+
+def set_feature(key: str, on: bool) -> None:
+    _set_setting(f"feat:{key}", "1" if on else "0")
+
+
+def features_status() -> str:
+    return "Functie-schakelaars (Ko kan ze aan/uit zetten):\n" + "\n".join(
+        f"- {k}: {'AAN' if feature_on(k) else 'UIT'} — {d}"
+        for k, d in FEATURES.items())
 
 
 def reminder_already_sent(key: str) -> bool:
@@ -761,6 +815,9 @@ als iets klaar is. Ko's openstaande taken staan hieronder in je context.
 daarna eventueel de afspraak of meeting in.
    - Follow-ups: elke mail die je verstuurt volg je automatisch op antwoord; je port Ko als \
 er te lang niks komt. Zegt Ko dat iets is afgehandeld, gebruik dan 'followup_sluiten'.
+5. Functies aan/uit: Ko kan elke automatische functie uitzetten ("zet de follow-up radar \
+uit", "geen ochtend-brief meer"). Gebruik dan 'functie_instellen'. De huidige stand staat \
+in je context; als een functie UIT staat, doe je 'm niet en bied je 'm ook niet ongevraagd aan.
 
 Je onthoudt het lopende gesprek (je krijgt de eerdere berichten mee) plus een lijst van \
 concepten die je deze sessie al hebt klaargezet. Als Ko vraagt "laat dat concept zien" \
@@ -909,6 +966,24 @@ FOLLOWUP_CLOSE_TOOL = {
     },
 }
 
+SETTINGS_TOOL = {
+    "name": "functie_instellen",
+    "description": "Zet een automatische functie AAN of UIT als Ko dat vraagt. Geldige "
+                   "functies: dagelijkse_brief (ochtend-agenda), herinnering_1u (1 uur "
+                   "vooraf), verjaardagen (week vooraf), taken (deadline-herinneringen), "
+                   "followup_radar (mails opvolgen). De huidige stand staat in je context.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "functie": {"type": "string",
+                        "enum": ["dagelijkse_brief", "herinnering_1u", "verjaardagen",
+                                 "taken", "followup_radar"]},
+            "aan": {"type": "boolean", "description": "true = aanzetten, false = uitzetten."},
+        },
+        "required": ["functie", "aan"],
+    },
+}
+
 DELETE_EVENT_TOOL = {
     "name": "agenda_afspraak_verwijderen",
     "description": "Verwijder een afspraak uit de agenda. Gebruik het event_id dat "
@@ -953,6 +1028,7 @@ def _build_system(context: str, agenda: str, session_drafts: list[dict]) -> str:
          + "\n\n--- Je agenda (gebruik dit om 'ben ik druk?' te beantwoorden) ---\n"
          + agenda
          + "\n\n--- Openstaande taken van Ko ---\n" + todos_context()
+         + "\n\n--- " + features_status()
          + "\n\n--- Recente mail als context ---\n" + context)
     if session_drafts:
         s += "\n\n--- Concepten die je deze sessie al hebt klaargezet ---\n"
@@ -1013,12 +1089,15 @@ def execute_tool(name: str, inp: dict, accounts_by_name: dict,
                 send_email(acc, to, inp.get("subject", ""), inp.get("body", ""))
             else:
                 return "Geen verzendmethode beschikbaar."
-            # Follow-up radar: houd bij dat we op antwoord wachten.
-            try:
-                followup_add(to, inp.get("subject", "(geen onderwerp)"))
-            except Exception as e:
-                print(f"Follow-up toevoegen faalde: {e}", file=sys.stderr)
-            return f"Verstuurd naar {to}. (Ik hou in de gaten of er antwoord komt.)"
+            # Follow-up radar: houd bij dat we op antwoord wachten (indien aan).
+            note = ""
+            if feature_on("followup_radar"):
+                try:
+                    followup_add(to, inp.get("subject", "(geen onderwerp)"))
+                    note = " (Ik hou in de gaten of er antwoord komt.)"
+                except Exception as e:
+                    print(f"Follow-up toevoegen faalde: {e}", file=sys.stderr)
+            return f"Verstuurd naar {to}.{note}"
         except Exception as e:
             return f"Versturen mislukt: {e}"
 
@@ -1085,12 +1164,20 @@ def execute_tool(name: str, inp: dict, accounts_by_name: dict,
                 closed += 1
         return f"{closed} follow-up(s) afgesloten." if closed else "Geen follow-up gevonden."
 
+    if name == "functie_instellen":
+        key = inp.get("functie")
+        if key not in FEATURES:
+            return f"Onbekende functie: {key}."
+        set_feature(key, bool(inp.get("aan")))
+        return (f"'{FEATURES[key]}' staat nu "
+                f"{'AAN' if inp.get('aan') else 'UIT'}.")
+
     return f"Onbekende tool: {name}"
 
 
 ALL_TOOLS = [CONTACT_TOOL, DRAFT_TOOL, SEND_TOOL, CALENDAR_TOOL,
              MEETING_TOOL, DELETE_EVENT_TOOL, TODO_ADD_TOOL, TODO_DONE_TOOL,
-             MEMORY_SEARCH_TOOL, FREESLOT_TOOL, FOLLOWUP_CLOSE_TOOL]
+             MEMORY_SEARCH_TOOL, FREESLOT_TOOL, FOLLOWUP_CLOSE_TOOL, SETTINGS_TOOL]
 
 
 def handle(client: anthropic.Anthropic, history: list[dict], message: str,
