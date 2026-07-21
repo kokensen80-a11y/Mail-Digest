@@ -68,7 +68,9 @@ GOOGLE_TOKEN_FILE = os.getenv(
     "GOOGLE_TOKEN_FILE",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "google_token.json"))
 GOOGLE_SCOPES = ["https://www.googleapis.com/auth/gmail.send",
-                 "https://www.googleapis.com/auth/calendar"]
+                 "https://www.googleapis.com/auth/calendar",
+                 "https://www.googleapis.com/auth/contacts.readonly",
+                 "https://www.googleapis.com/auth/contacts.other.readonly"]
 TIMEZONE = os.getenv("TRUUS_TZ", "Europe/Amsterdam")
 LOCAL_TZ = ZoneInfo(TIMEZONE)  # altijd Amsterdamse tijd, niet de server-tijd (UTC)
 
@@ -174,6 +176,47 @@ def calendar_add_meeting(summary: str, start_iso: str, end_iso: str,
         calendarId="primary", body=event,
         conferenceDataVersion=1, sendUpdates="all").execute()
     return ev.get("hangoutLink", "")
+
+
+def _person(p: dict) -> dict | None:
+    names = p.get("names", [])
+    emails = p.get("emailAddresses", [])
+    if not emails:
+        return None
+    name = names[0].get("displayName") if names else emails[0].get("value")
+    return {"name": name or emails[0].get("value"), "email": emails[0].get("value")}
+
+
+def contact_search(name: str) -> list[dict]:
+    """Zoek e-mailadressen op naam, uit opgeslagen contacten én iedereen die Ko
+    ooit heeft gemaild (Google 'other contacts')."""
+    svc = _service("people", "v1")
+    found: list[dict] = []
+    mask = "names,emailAddresses"
+    try:
+        r = svc.otherContacts().search(query=name, readMask=mask).execute()
+        for item in r.get("results", []):
+            p = _person(item.get("person", {}))
+            if p:
+                found.append(p)
+    except Exception as e:
+        print(f"otherContacts zoeken faalde: {e}", file=sys.stderr)
+    try:
+        r = svc.people().searchContacts(query=name, readMask=mask).execute()
+        for item in r.get("results", []):
+            p = _person(item.get("person", {}))
+            if p:
+                found.append(p)
+    except Exception as e:
+        print(f"contacten zoeken faalde: {e}", file=sys.stderr)
+    # Dedupe op e-mailadres.
+    seen, unique = set(), []
+    for p in found:
+        key = p["email"].lower()
+        if key not in seen:
+            seen.add(key)
+            unique.append(p)
+    return unique[:8]
 
 
 def calendar_events(time_min_iso: str, time_max_iso: str) -> list[dict]:
@@ -540,6 +583,20 @@ info@kodesaign.com). Privé? Gebruik "Gmail privé" of "Gmail studio", afhankeli
 waar de oorspronkelijke mail binnenkwam."""
 
 
+CONTACT_TOOL = {
+    "name": "contact_opzoeken",
+    "description": "Zoek het e-mailadres van iemand op naam, uit Ko's opgeslagen "
+                   "contacten én iedereen die Ko ooit heeft gemaild. Gebruik dit "
+                   "ZODRA Ko iemand alleen bij voornaam of naam noemt (bijv. 'mail Cas' "
+                   "of 'plan een meeting met Cas') en je het adres nog niet hebt. Krijg "
+                   "je meerdere treffers, vraag dan aan Ko welke hij bedoelt.",
+    "input_schema": {
+        "type": "object",
+        "properties": {"naam": {"type": "string", "description": "De naam om te zoeken."}},
+        "required": ["naam"],
+    },
+}
+
 DRAFT_TOOL = {
     "name": "concept_klaarzetten",
     "description": "Zet een concept-mail klaar in de Concepten-map van de juiste "
@@ -650,40 +707,105 @@ def _build_system(context: str, agenda: str, session_drafts: list[dict]) -> str:
     return s
 
 
+def execute_tool(name: str, inp: dict, accounts_by_name: dict,
+                 session_drafts: list[dict]) -> str:
+    """Voer één tool uit en geef een korte tekst-uitkomst terug voor het model."""
+    if name == "contact_opzoeken":
+        matches = contact_search(inp.get("naam", ""))
+        if not matches:
+            return f"Geen contact gevonden voor '{inp.get('naam')}'."
+        return "Gevonden:\n" + "\n".join(f"- {m['name']} <{m['email']}>" for m in matches)
+
+    if name == "concept_klaarzetten":
+        acc = accounts_by_name.get(inp.get("account"))
+        if not acc or not inp.get("to"):
+            return "Kon concept niet klaarzetten: onbekend account of ontvanger."
+        try:
+            save_draft(acc, inp["to"], inp.get("subject", "Re:"), inp.get("body", ""))
+            session_drafts.append(inp)
+            return f"Concept klaargezet in {acc.user}."
+        except Exception as e:
+            return f"Concept opslaan mislukt: {e}"
+
+    if name == "mail_versturen":
+        acc = accounts_by_name.get(inp.get("account"))
+        to = inp.get("to")
+        if not to:
+            return "Geen ontvanger opgegeven."
+        sender = acc.user if acc else None
+        try:
+            if google_enabled():
+                gmail_send(to, inp.get("subject", ""), inp.get("body", ""), sender=sender)
+            elif acc:
+                send_email(acc, to, inp.get("subject", ""), inp.get("body", ""))
+            else:
+                return "Geen verzendmethode beschikbaar."
+            return f"Verstuurd naar {to}."
+        except Exception as e:
+            return f"Versturen mislukt: {e}"
+
+    if name == "agenda_afspraak_toevoegen":
+        try:
+            calendar_add(inp.get("summary", "Afspraak"), inp["start"], inp["end"],
+                         inp.get("description", ""), inp.get("location", ""))
+            return "Afspraak toegevoegd aan de agenda."
+        except Exception as e:
+            return f"Inplannen mislukt: {e}"
+
+    if name == "meeting_inplannen":
+        try:
+            link = calendar_add_meeting(
+                inp.get("summary", "Meeting"), inp["start"], inp["end"],
+                inp.get("attendees", []), inp.get("description", ""))
+            return (f"Meeting ingepland en uitnodigingen verstuurd. "
+                    f"Google Meet-link: {link or '(volgt)'}")
+        except Exception as e:
+            return f"Meeting inplannen mislukt: {e}"
+
+    if name == "agenda_afspraak_verwijderen":
+        try:
+            calendar_delete(inp["event_id"])
+            return "Afspraak verwijderd uit de agenda."
+        except Exception as e:
+            return f"Verwijderen mislukt: {e}"
+
+    return f"Onbekende tool: {name}"
+
+
+ALL_TOOLS = [CONTACT_TOOL, DRAFT_TOOL, SEND_TOOL, CALENDAR_TOOL,
+             MEETING_TOOL, DELETE_EVENT_TOOL]
+
+
 def handle(client: anthropic.Anthropic, history: list[dict], message: str,
-           context: str, agenda: str, session_drafts: list[dict]) -> dict:
+           context: str, agenda: str, session_drafts: list[dict],
+           accounts_by_name: dict) -> str:
+    """Verwerk Ko's bericht; Able mag tools ketenen (bijv. eerst contact opzoeken,
+    dan meeting plannen). Geeft de uiteindelijke tekst voor Telegram terug."""
     messages = history + [{"role": "user", "content": message}]
-    resp = client.messages.create(
-        model=CLAUDE_MODEL,
-        max_tokens=1500,
-        system=_build_system(context, agenda, session_drafts),
-        tools=[DRAFT_TOOL, SEND_TOOL, CALENDAR_TOOL, MEETING_TOOL, DELETE_EVENT_TOOL],
-        messages=messages,
-    )
-    reply = "".join(b.text for b in resp.content if b.type == "text").strip()
-
-    def tool_inputs(name):
-        return [b.input for b in resp.content
-                if b.type == "tool_use" and b.name == name]
-
-    drafts = tool_inputs("concept_klaarzetten")
-    sends = tool_inputs("mail_versturen")
-    events = tool_inputs("agenda_afspraak_toevoegen")
-    meetings = tool_inputs("meeting_inplannen")
-    deletes = tool_inputs("agenda_afspraak_verwijderen")
-    if not reply:
-        reply = ("Ik heb een concept voor je klaargezet." if drafts
-                 else "Verstuurd, Ko." if sends
-                 else "Meeting ingepland, Ko." if meetings
-                 else "In je agenda gezet, Ko." if events
-                 else "Uit je agenda gehaald, Ko." if deletes else "Genoteerd, Ko.")
-    return {"reply": reply, "drafts": drafts, "sends": sends,
-            "events": events, "meetings": meetings, "deletes": deletes}
+    system = _build_system(context, agenda, session_drafts)
+    final_text = ""
+    for _ in range(6):
+        resp = client.messages.create(
+            model=CLAUDE_MODEL, max_tokens=1500, system=system,
+            tools=ALL_TOOLS, messages=messages)
+        text = "".join(b.text for b in resp.content if b.type == "text").strip()
+        if text:
+            final_text = text
+        tool_uses = [b for b in resp.content if b.type == "tool_use"]
+        if not tool_uses:
+            break
+        messages.append({"role": "assistant", "content": resp.content})
+        results = []
+        for tu in tool_uses:
+            out = execute_tool(tu.name, tu.input, accounts_by_name, session_drafts)
+            results.append({"type": "tool_result", "tool_use_id": tu.id, "content": out})
+        messages.append({"role": "user", "content": results})
+    return final_text or "Genoteerd, Ko."
 
 
 def process(client, accounts_by_name, message: str, context: str, agenda: str,
             history: list[dict], session_drafts: list[dict]) -> None:
-    # Blijf "aan het typen…" tonen zolang Truus bezig is.
+    # Blijf "aan het typen…" tonen zolang Able bezig is.
     stop = threading.Event()
 
     def keep_typing():
@@ -691,82 +813,14 @@ def process(client, accounts_by_name, message: str, context: str, agenda: str,
             send_typing()
             stop.wait(4)
 
-    t = threading.Thread(target=keep_typing, daemon=True)
-    t.start()
+    threading.Thread(target=keep_typing, daemon=True).start()
     try:
-        result = handle(client, history, message, context, agenda, session_drafts)
+        reply = handle(client, history, message, context, agenda,
+                       session_drafts, accounts_by_name)
     finally:
         stop.set()
 
-    reply = (result.get("reply") or "").strip() or "Genoteerd, Ko."
-
-    # Echt versturen (alleen als Truus de mail_versturen-tool aanriep na bevestiging).
-    for s in result.get("sends", []):
-        acc = accounts_by_name.get(s.get("account"))
-        to = s.get("to")
-        if not to:
-            reply += "\n\n⚠️ Kon niet versturen: geen ontvanger."
-            continue
-        sender = acc.user if acc else None
-        try:
-            if google_enabled():
-                gmail_send(to, s.get("subject", ""), s.get("body", ""), sender=sender)
-            elif acc:
-                send_email(acc, to, s.get("subject", ""), s.get("body", ""))
-            else:
-                raise RuntimeError("geen verzendmethode beschikbaar")
-            reply += f"\n\n✅ Verstuurd naar {to}" + (f" vanuit {sender}." if sender else ".")
-        except Exception as e:
-            print(f"Versturen mislukt ({s.get('account')}): {e}", file=sys.stderr)
-            reply += f"\n\n⚠️ Het versturen lukte niet ({e})."
-
-    # Afspraken in de agenda zetten.
-    for ev in result.get("events", []):
-        try:
-            calendar_add(ev.get("summary", "Afspraak"), ev["start"], ev["end"],
-                         ev.get("description", ""), ev.get("location", ""))
-            reply += f"\n\n📅 In je agenda gezet: {ev.get('summary', 'afspraak')}."
-        except Exception as e:
-            print(f"Agenda toevoegen mislukt: {e}", file=sys.stderr)
-            reply += f"\n\n⚠️ Het inplannen lukte niet ({e})."
-
-    # Google Meet-meetings inplannen (met uitnodigingen).
-    for m in result.get("meetings", []):
-        try:
-            link = calendar_add_meeting(
-                m.get("summary", "Meeting"), m["start"], m["end"],
-                m.get("attendees", []), m.get("description", ""))
-            wie = ", ".join(m.get("attendees", [])) or "de deelnemers"
-            reply += (f"\n\n🎥 Meeting ingepland en uitnodiging gestuurd naar {wie}."
-                      + (f"\nMeet-link: {link}" if link else ""))
-        except Exception as e:
-            print(f"Meeting inplannen mislukt: {e}", file=sys.stderr)
-            reply += f"\n\n⚠️ Het inplannen van de meeting lukte niet ({e})."
-
-    # Afspraken verwijderen.
-    for d in result.get("deletes", []):
-        try:
-            calendar_delete(d["event_id"])
-            reply += "\n\n🗑️ Uit je agenda gehaald."
-        except Exception as e:
-            print(f"Agenda verwijderen mislukt: {e}", file=sys.stderr)
-            reply += f"\n\n⚠️ Het verwijderen lukte niet ({e})."
-
-    saved = []
-    for d in result.get("drafts", []):
-        acc = accounts_by_name.get(d.get("account"))
-        if not acc or not d.get("to"):
-            continue
-        try:
-            save_draft(acc, d["to"], d.get("subject", "Re:"), d.get("body", ""))
-            saved.append(acc.user)
-            session_drafts.append(d)  # onthoud voor later ("laat zien")
-        except Exception as e:
-            print(f"Concept opslaan mislukt ({d.get('account')}): {e}", file=sys.stderr)
-            reply += f"\n\n⚠️ Het concept opslaan lukte niet ({d.get('account')})."
-    if saved:
-        reply += f"\n\n✍️ Concept klaargezet in: {', '.join(dict.fromkeys(saved))}."
-
+    reply = (reply or "").strip() or "Genoteerd, Ko."
     send_telegram(reply)
 
     # Gespreksgeheugen bijwerken: in het werkgeheugen én permanent in de database.
