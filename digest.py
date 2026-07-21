@@ -245,11 +245,12 @@ weg als er niets relevants is.
 Laat weg als er geen ruis is.
 5. Als er postbussen niet bereikbaar waren (zie 'PROBLEMEN' in de invoer), meld \
 dat kort en rustig in één zin, met ⚠️ ervoor.
-6. Als er concept-antwoorden zijn klaargezet, sluit af met een regel als \
-"✍️ Ik heb alvast een concept klaargezet voor [afzender]." (alleen als er drafts zijn).
-7. Eindig met exact deze twee regels (na een lege regel):
+6. Eindig met exact deze twee regels (na een lege regel):
 Fijne dag,
 Ko
+
+Vermeld in het Telegram-bericht NIET zelf hoeveel concepten je hebt klaargezet — \
+het systeem stuurt daarover apart een accuraat berichtje na het opslaan.
 
 Regels:
 - Filter ruis (nieuwsbrieven, notificaties, marketing) uit de lijst; die tel je \
@@ -262,11 +263,20 @@ vet) alleen voor de afzendernaam.
 concept-antwoord in het Nederlands. Dat concept komt NIET in het Telegram-bericht, \
 maar uitsluitend in de 'drafts'-lijst.
 
+ROUTERING van concepten (belangrijk):
+- Is het antwoord ZAKELIJK/business (klant, opdracht, offerte, leverancier, factuur, \
+samenwerking, alles rond Kodesaign)? Zet dan het veld "account" ALTIJD op "Kodesaign", \
+ongeacht in welke postbus de mail binnenkwam. Die antwoorden gaan namelijk vanuit \
+info@kodesaign.com.
+- Is het antwoord privé/persoonlijk? Gebruik dan de accountnaam van de postbus waarin \
+de mail binnenkwam (staat bij "Account:" in de invoer).
+
 Antwoord UITSLUITEND met geldige JSON in dit schema:
 {
   "summary_markdown": "<het volledige Telegram-bericht, van 'Goedemorgen Ko,' t/m 'Fijne dag,\\nKo'>",
   "drafts": [
-    {"account": "<accountnaam>", "to": "<e-mailadres afzender>", \
+    {"account": "Kodesaign | Gmail privé | Gmail studio", \
+"to": "<e-mailadres afzender>", \
 "subject": "<Re: ...>", "body": "<concept-antwoord>"}
   ]
 }
@@ -354,6 +364,40 @@ def _chunk(text: str, size: int):
 # Concept-antwoorden opslaan in de Concepten-map (IMAP APPEND)
 # ---------------------------------------------------------------------------
 
+def _find_drafts_folder(imap: imaplib.IMAP4_SSL, preferred: str) -> str:
+    """Zoek de echte Concepten-map van deze server.
+
+    Servers noemen die verschillend (Drafts, Concepten, INBOX.Drafts,
+    [Gmail]/Drafts). We kijken eerst naar de \\Drafts-special-use-vlag, en
+    vallen anders terug op bekende namen die daadwerkelijk bestaan.
+    """
+    try:
+        status, data = imap.list()
+    except Exception:
+        return preferred
+    if status != "OK" or not data:
+        return preferred
+
+    names: list[str] = []
+    special_drafts: str | None = None
+    for raw in data:
+        line = raw.decode(errors="replace") if isinstance(raw, bytes) else str(raw)
+        # Mapnaam staat als laatste, meestal tussen quotes.
+        name = line.split(' "/" ')[-1].split(' "." ')[-1].strip().strip('"')
+        names.append(name)
+        if "\\Drafts" in line and special_drafts is None:
+            special_drafts = name
+    if special_drafts:
+        return special_drafts
+
+    candidates = [preferred, "Drafts", "INBOX.Drafts", "Concepten",
+                  "INBOX.Concepten", "[Gmail]/Drafts"]
+    for cand in candidates:
+        if cand in names:
+            return cand
+    return preferred
+
+
 def save_draft(account: Account, to_addr: str, subject: str, body: str) -> None:
     msg = EmailMessage()
     msg["From"] = account.user
@@ -365,9 +409,12 @@ def save_draft(account: Account, to_addr: str, subject: str, body: str) -> None:
     imap = imaplib.IMAP4_SSL(account.imap_host, account.imap_port, ssl_context=ctx)
     try:
         imap.login(account.user, account.password)
-        imap.append(account.drafts_folder, "(\\Draft)",
-                    imaplib.Time2Internaldate(datetime.now().timestamp()),
-                    msg.as_bytes())
+        folder = _find_drafts_folder(imap, account.drafts_folder)
+        status, _ = imap.append(folder, "(\\Draft)",
+                                imaplib.Time2Internaldate(datetime.now().timestamp()),
+                                msg.as_bytes())
+        if status != "OK":
+            raise RuntimeError(f"APPEND naar '{folder}' gaf status {status}")
     finally:
         try:
             imap.logout()
@@ -415,20 +462,31 @@ def main() -> int:
 
     # Concept-antwoorden klaarzetten
     drafts = result.get("drafts", []) if CREATE_DRAFTS else []
-    saved = 0
     by_name = {a.name: a for a in accounts}
+    saved_by_account: dict[str, int] = {}
+    failed: list[str] = []
     for d in drafts:
         acc = by_name.get(d.get("account"))
         if not acc or not d.get("to"):
+            # Onbekend account of geen ontvanger: sla over maar meld het.
+            failed.append(f"{d.get('account', '?')} → {d.get('to', '?')}")
             continue
         try:
             save_draft(acc, d["to"], d.get("subject", "Re:"), d.get("body", ""))
-            saved += 1
+            saved_by_account[acc.user] = saved_by_account.get(acc.user, 0) + 1
         except Exception as e:
+            failed.append(f"{acc.user}: {e}")
             print(f"Kon concept niet opslaan ({acc.name}): {e}", file=sys.stderr)
 
-    if saved:
-        send_telegram(f"✍️ {saved} concept-antwoord(en) klaargezet in je Concepten-map.")
+    total = sum(saved_by_account.values())
+    if total or failed:
+        parts = []
+        if total:
+            waar = ", ".join(f"{n}× in {addr}" for addr, n in saved_by_account.items())
+            parts.append(f"✍️ {total} concept-antwoord(en) klaargezet: {waar}.")
+        if failed:
+            parts.append("⚠️ Niet gelukt om klaar te zetten: " + "; ".join(failed))
+        send_telegram("\n".join(parts))
 
     return 0
 
