@@ -962,6 +962,24 @@ def _build_system(context: str, agenda: str, session_drafts: list[dict]) -> str:
     return s
 
 
+def _messages_create(client, **kwargs):
+    """Roep Claude aan met een paar herhalingen bij tijdelijke overbelasting."""
+    last = None
+    for attempt in range(4):
+        try:
+            return client.messages.create(**kwargs)
+        except Exception as e:
+            last = e
+            m = str(e).lower()
+            transient = any(k in m for k in
+                            ("overloaded", "529", "429", "rate", "timeout", "503", "502"))
+            if transient and attempt < 3:
+                time.sleep(2 * (attempt + 1))
+                continue
+            raise
+    raise last
+
+
 def execute_tool(name: str, inp: dict, accounts_by_name: dict,
                  session_drafts: list[dict]) -> str:
     """Voer één tool uit en geef een korte tekst-uitkomst terug voor het model."""
@@ -1084,8 +1102,8 @@ def handle(client: anthropic.Anthropic, history: list[dict], message: str,
     system = _build_system(context, agenda, session_drafts)
     final_text = ""
     for _ in range(6):
-        resp = client.messages.create(
-            model=CLAUDE_MODEL, max_tokens=1500, system=system,
+        resp = _messages_create(
+            client, model=CLAUDE_MODEL, max_tokens=1500, system=system,
             tools=ALL_TOOLS, messages=messages)
         text = "".join(b.text for b in resp.content if b.type == "text").strip()
         if text:
