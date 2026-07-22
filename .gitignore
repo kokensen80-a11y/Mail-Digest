@@ -4,3 +4,13 @@ __pycache__/
 .venv/
 venv/
 .DS_Store
+
+# Secrets & lokale data (vangnet — mochten deze ooit in de map belanden)
+.env.*
+!.env.example
+*.db
+*.sqlite3
+*.log
+google_token.json
+token*.json
+*credentials*.json

@@ -18,6 +18,7 @@ Herbruikt de bouwstenen uit digest.py. Geen wachtwoorden in dit bestand.
 
 from __future__ import annotations
 
+import contextvars
 import json
 import os
 import smtplib
@@ -75,20 +76,146 @@ TIMEZONE = os.getenv("TRUUS_TZ", "Europe/Amsterdam")
 LOCAL_TZ = ZoneInfo(TIMEZONE)  # altijd Amsterdamse tijd, niet de server-tijd (UTC)
 
 
-def google_enabled() -> bool:
-    return os.path.exists(GOOGLE_TOKEN_FILE)
+def google_enabled(uid: int | None = None) -> bool:
+    return bool(get_user_google_token(cur_uid() if uid is None else uid))
 
 
 # Verbindingen worden één keer opgebouwd en hergebruikt (scheelt veel tijd).
+# Per gebruiker een eigen cache (multi-user): _google_cache[uid] = {...}
 _google_cache: dict = {}
+
+# "Huidige gebruiker" voor de webverzoeken. Telegram/digest laten dit op 1 (Ko).
+_CUR_UID: contextvars.ContextVar = contextvars.ContextVar("uid", default=1)
+
+
+def cur_uid() -> int:
+    return _CUR_UID.get()
+
+
+def set_uid(uid: int) -> None:
+    _CUR_UID.set(int(uid))
+
+
+# --- Gebruikers (multi-user) ------------------------------------------------
+
+def get_user(uid: int) -> dict | None:
+    try:
+        con = sqlite3.connect(DB_PATH)
+        con.row_factory = sqlite3.Row
+        row = con.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+        con.close()
+        return dict(row) if row else None
+    except Exception:
+        return None
+
+
+def get_user_by_username(username: str) -> dict | None:
+    try:
+        con = sqlite3.connect(DB_PATH)
+        con.row_factory = sqlite3.Row
+        row = con.execute("SELECT * FROM users WHERE username=?",
+                          (username.strip().lower(),)).fetchone()
+        con.close()
+        return dict(row) if row else None
+    except Exception:
+        return None
+
+
+def list_users() -> list[dict]:
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    rows = con.execute("SELECT id, username, name, is_admin, "
+                       "(google_token IS NOT NULL) AS has_google FROM users "
+                       "ORDER BY id").fetchall()
+    con.close()
+    return [dict(r) for r in rows]
+
+
+def create_user(username: str, name: str, pw_hash: str, is_admin: int = 0) -> int:
+    con = sqlite3.connect(DB_PATH)
+    cur = con.execute("INSERT INTO users (username, name, pw_hash, is_admin, created_ts) "
+                      "VALUES (?,?,?,?,?)",
+                      (username.strip().lower(), name.strip(), pw_hash, is_admin,
+                       datetime.now(LOCAL_TZ).isoformat()))
+    uid = cur.lastrowid
+    con.commit()
+    con.close()
+    return uid
+
+
+def delete_user(uid: int) -> None:
+    """Verwijder een gebruiker én al zijn data (geheugen, taken, follow-ups,
+    instellingen, spraakverbruik). Gebruiker 1 (Ko) kan niet worden verwijderd."""
+    if int(uid) == 1:
+        return
+    con = sqlite3.connect(DB_PATH)
+    for tbl in ("messages", "todos", "followups", "settings", "voice_usage"):
+        try:
+            con.execute(f"DELETE FROM {tbl} WHERE user_id=?", (uid,))
+        except Exception:
+            pass
+    con.execute("DELETE FROM users WHERE id=?", (uid,))
+    con.commit()
+    con.close()
+    _google_cache.pop(uid, None)
+
+
+def set_user_password(uid: int, pw_hash: str) -> None:
+    con = sqlite3.connect(DB_PATH)
+    con.execute("UPDATE users SET pw_hash=? WHERE id=?", (pw_hash, uid))
+    con.commit()
+    con.close()
+
+
+def delete_user(uid: int) -> None:
+    """Verwijder een gebruiker én al zijn data. Gebruiker 1 (Ko) kan niet weg."""
+    if int(uid) == 1:
+        raise ValueError("De beheerder kan niet verwijderd worden.")
+    con = sqlite3.connect(DB_PATH)
+    for tbl in ("messages", "todos", "followups", "settings", "voice_usage"):
+        con.execute(f"DELETE FROM {tbl} WHERE user_id=?", (uid,))
+    con.execute("DELETE FROM users WHERE id=?", (uid,))
+    con.commit()
+    con.close()
+    _google_cache.pop(uid, None)
+
+
+def get_user_google_token(uid: int) -> str | None:
+    con = sqlite3.connect(DB_PATH)
+    row = con.execute("SELECT google_token FROM users WHERE id=?", (uid,)).fetchone()
+    con.close()
+    tok = row[0] if row else None
+    # Terugval voor Ko (1): het oude tokenbestand.
+    if not tok and uid == 1 and os.path.exists(GOOGLE_TOKEN_FILE):
+        try:
+            tok = open(GOOGLE_TOKEN_FILE).read()
+        except Exception:
+            tok = None
+    return tok
+
+
+def set_user_google_token(uid: int, token_json: str) -> None:
+    con = sqlite3.connect(DB_PATH)
+    con.execute("UPDATE users SET google_token=? WHERE id=?", (token_json, uid))
+    con.commit()
+    con.close()
+    _google_cache.pop(uid, None)  # cache verversen
+
+
+def _ucache(uid: int) -> dict:
+    return _google_cache.setdefault(uid, {})
 
 
 def _google_creds():
-    if "creds" not in _google_cache:
+    uid = cur_uid()
+    cache = _ucache(uid)
+    if "creds" not in cache:
         from google.oauth2.credentials import Credentials
-        with open(GOOGLE_TOKEN_FILE) as f:
-            d = json.load(f)
-        _google_cache["creds"] = Credentials(
+        tok = get_user_google_token(uid)
+        if not tok:
+            raise RuntimeError("Geen Google-koppeling voor deze gebruiker.")
+        d = json.loads(tok)
+        cache["creds"] = Credentials(
             token=None,
             refresh_token=d["refresh_token"],
             client_id=d["client_id"],
@@ -96,16 +223,17 @@ def _google_creds():
             token_uri="https://oauth2.googleapis.com/token",
             scopes=GOOGLE_SCOPES,
         )
-    return _google_cache["creds"]
+    return cache["creds"]
 
 
 def _service(name: str, version: str):
+    cache = _ucache(cur_uid())
     key = f"svc:{name}"
-    if key not in _google_cache:
+    if key not in cache:
         from googleapiclient.discovery import build
-        _google_cache[key] = build(name, version, credentials=_google_creds(),
-                                   cache_discovery=False)
-    return _google_cache[key]
+        cache[key] = build(name, version, credentials=_google_creds(),
+                           cache_discovery=False)
+    return cache[key]
 
 
 def warm_google() -> None:
@@ -401,7 +529,7 @@ def check_todos() -> None:
     today = datetime.now(LOCAL_TZ).date().isoformat()
     con = sqlite3.connect(DB_PATH)
     rows = con.execute(
-        "SELECT id, text, due FROM todos WHERE done = 0 AND reminded = 0 "
+        "SELECT id, text, due FROM todos WHERE user_id = 1 AND done = 0 AND reminded = 0 "
         "AND due IS NOT NULL AND due <= ?", (today,)).fetchall()
     for tid, text, due in rows:
         send_telegram(f"✅ Herinnering: *{text}* (deadline {due}).")
@@ -518,6 +646,54 @@ def init_db() -> None:
     con.execute("""CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL)""")
+    # Spraakverbruik per gebruiker per maand (voor het maandbudget).
+    con.execute("""CREATE TABLE IF NOT EXISTS voice_usage (
+        user_id INTEGER NOT NULL DEFAULT 1,
+        month TEXT NOT NULL,
+        seconds INTEGER NOT NULL DEFAULT 0,
+        cents INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (user_id, month))""")
+
+    # --- Multi-user migratie (idempotent): user_id op de datatabellen ---
+    def _cols(tbl):
+        return [r[1] for r in con.execute(f"PRAGMA table_info({tbl})")]
+    for tbl in ("messages", "todos", "followups"):
+        if "user_id" not in _cols(tbl):
+            con.execute(f"ALTER TABLE {tbl} ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1")
+        con.execute(f"CREATE INDEX IF NOT EXISTS idx_{tbl}_user ON {tbl}(user_id)")
+    # settings -> samengestelde sleutel (user_id, key); bestaande rijen = Ko (1)
+    if "user_id" not in _cols("settings"):
+        con.execute("""CREATE TABLE settings_new (
+            user_id INTEGER NOT NULL DEFAULT 1,
+            key TEXT NOT NULL, value TEXT NOT NULL,
+            PRIMARY KEY (user_id, key))""")
+        con.execute("INSERT INTO settings_new (user_id, key, value) "
+                    "SELECT 1, key, value FROM settings")
+        con.execute("DROP TABLE settings")
+        con.execute("ALTER TABLE settings_new RENAME TO settings")
+
+    # Gebruikers (multi-user). Ko is altijd gebruiker 1.
+    con.execute("""CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        pw_hash TEXT,
+        google_token TEXT,
+        is_admin INTEGER DEFAULT 0,
+        created_ts TEXT NOT NULL)""")
+    row = con.execute("SELECT id FROM users WHERE id=1").fetchone()
+    if not row:
+        pw = con.execute("SELECT value FROM settings WHERE user_id=1 AND key='web_pw_hash'").fetchone()
+        gtok = None
+        try:
+            if os.path.exists(GOOGLE_TOKEN_FILE):
+                gtok = open(GOOGLE_TOKEN_FILE).read()
+        except Exception:
+            gtok = None
+        con.execute("INSERT INTO users (id, username, name, pw_hash, google_token, is_admin, created_ts) "
+                    "VALUES (1, 'ko', 'Ko', ?, ?, 1, ?)",
+                    (pw[0] if pw else None, gtok,
+                     datetime.now(LOCAL_TZ).isoformat()))
     con.commit()
     con.close()
 
@@ -535,30 +711,99 @@ FEATURES = {
 }
 
 
-def _get_setting(key: str, default: str | None = None) -> str | None:
+def _get_setting(key: str, default: str | None = None, uid: int | None = None) -> str | None:
+    if uid is None:
+        uid = cur_uid()
     try:
         con = sqlite3.connect(DB_PATH)
-        row = con.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        row = con.execute("SELECT value FROM settings WHERE user_id = ? AND key = ?",
+                          (uid, key)).fetchone()
         con.close()
         return row[0] if row else default
     except Exception:
         return default
 
 
-def _set_setting(key: str, value: str) -> None:
+def _set_setting(key: str, value: str, uid: int | None = None) -> None:
+    if uid is None:
+        uid = cur_uid()
     con = sqlite3.connect(DB_PATH)
-    con.execute("INSERT INTO settings (key, value) VALUES (?, ?) "
-                "ON CONFLICT(key) DO UPDATE SET value = excluded.value", (key, value))
+    con.execute("INSERT INTO settings (user_id, key, value) VALUES (?, ?, ?) "
+                "ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value",
+                (uid, key, value))
     con.commit()
     con.close()
 
 
-def feature_on(key: str) -> bool:
-    return _get_setting(f"feat:{key}", "1") != "0"
+def feature_on(key: str, uid: int | None = None) -> bool:
+    return _get_setting(f"feat:{key}", "1", uid) != "0"
 
 
-def set_feature(key: str, on: bool) -> None:
-    _set_setting(f"feat:{key}", "1" if on else "0")
+# --- Spraakbudget (max € per gebruiker per maand) --------------------------
+
+def voice_cap_cents() -> int:
+    """Maandbudget in centen (standaard €3). Instelbaar via settings."""
+    try:
+        return int(_get_setting("voice_cap_cents", "300"))
+    except Exception:
+        return 300
+
+
+def voice_cents_per_min() -> float:
+    """Geschatte kosten per spraakminuut in centen (instelbaar, want de
+    OpenAI-prijs is een schatting)."""
+    try:
+        return float(_get_setting("voice_cents_per_min", "15"))
+    except Exception:
+        return 15.0
+
+
+def _voice_month() -> str:
+    return datetime.now(LOCAL_TZ).strftime("%Y-%m")
+
+
+def voice_spend_cents(uid: int = 1) -> int:
+    try:
+        con = sqlite3.connect(DB_PATH)
+        row = con.execute(
+            "SELECT cents FROM voice_usage WHERE user_id=? AND month=?",
+            (uid, _voice_month())).fetchone()
+        con.close()
+        return int(row[0]) if row else 0
+    except Exception:
+        return 0
+
+
+def voice_add_seconds(uid: int, seconds: float) -> None:
+    """Boek gebruikte spraakseconden bij en reken ze om naar centen."""
+    seconds = max(0, min(int(seconds), 3600))  # max 1 uur per sessie
+    if seconds <= 0:
+        return
+    cents = int(round(seconds / 60.0 * voice_cents_per_min()))
+    con = sqlite3.connect(DB_PATH)
+    con.execute(
+        "INSERT INTO voice_usage (user_id, month, seconds, cents) VALUES (?,?,?,?) "
+        "ON CONFLICT(user_id, month) DO UPDATE SET "
+        "seconds = seconds + excluded.seconds, cents = cents + excluded.cents",
+        (uid, _voice_month(), seconds, cents))
+    con.commit()
+    con.close()
+
+
+def voice_over_cap(uid: int = 1) -> bool:
+    return voice_spend_cents(uid) >= voice_cap_cents()
+
+
+def voice_usage_info(uid: int = 1) -> dict:
+    spent = voice_spend_cents(uid)
+    cap = voice_cap_cents()
+    pct = 0 if cap <= 0 else min(100, round(spent / cap * 100))
+    return {"spent_cents": spent, "cap_cents": cap,
+            "remaining_cents": max(0, cap - spent), "pct": pct}
+
+
+def set_feature(key: str, on: bool, uid: int | None = None) -> None:
+    _set_setting(f"feat:{key}", "1" if on else "0", uid)
 
 
 def features_status() -> str:
@@ -592,8 +837,8 @@ def mark_reminder_sent(key: str) -> None:
 
 def todo_add(text: str, due: str | None = None) -> None:
     con = sqlite3.connect(DB_PATH)
-    con.execute("INSERT INTO todos (ts, text, due) VALUES (?, ?, ?)",
-                (datetime.now(timezone.utc).isoformat(), text, due or None))
+    con.execute("INSERT INTO todos (ts, text, due, user_id) VALUES (?, ?, ?, ?)",
+                (datetime.now(timezone.utc).isoformat(), text, due or None, cur_uid()))
     con.commit()
     con.close()
 
@@ -601,7 +846,8 @@ def todo_add(text: str, due: str | None = None) -> None:
 def todo_list_open() -> list[dict]:
     con = sqlite3.connect(DB_PATH)
     rows = con.execute(
-        "SELECT id, text, due FROM todos WHERE done = 0 ORDER BY id").fetchall()
+        "SELECT id, text, due FROM todos WHERE user_id = ? AND done = 0 ORDER BY id",
+        (cur_uid(),)).fetchall()
     con.close()
     return [{"id": i, "text": t, "due": d} for i, t, d in rows]
 
@@ -609,8 +855,9 @@ def todo_list_open() -> list[dict]:
 def todo_complete(text_fragment: str) -> str:
     con = sqlite3.connect(DB_PATH)
     row = con.execute(
-        "SELECT id, text FROM todos WHERE done = 0 AND text LIKE ? ORDER BY id LIMIT 1",
-        (f"%{text_fragment}%",)).fetchone()
+        "SELECT id, text FROM todos WHERE user_id = ? AND done = 0 AND text LIKE ? "
+        "ORDER BY id LIMIT 1",
+        (cur_uid(), f"%{text_fragment}%")).fetchone()
     if row:
         con.execute("UPDATE todos SET done = 1 WHERE id = ?", (row[0],))
         con.commit()
@@ -634,8 +881,8 @@ def todos_context() -> str:
 def memory_search(query: str, limit: int = 8) -> list[dict]:
     con = sqlite3.connect(DB_PATH)
     rows = con.execute(
-        "SELECT ts, role, content FROM messages WHERE content LIKE ? "
-        "ORDER BY id DESC LIMIT ?", (f"%{query}%", limit)).fetchall()
+        "SELECT ts, role, content FROM messages WHERE user_id = ? AND content LIKE ? "
+        "ORDER BY id DESC LIMIT ?", (cur_uid(), f"%{query}%", limit)).fetchall()
     con.close()
     return [{"ts": ts, "role": r, "content": c} for ts, r, c in rows]
 
@@ -646,9 +893,9 @@ def followup_add(to_email: str, subject: str, days: int = 3) -> None:
     now = datetime.now(timezone.utc)
     remind_after = (now + timedelta(days=days)).isoformat()
     con = sqlite3.connect(DB_PATH)
-    con.execute("INSERT INTO followups (ts, to_email, subject, sent_ts, remind_after) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (now.isoformat(), to_email, subject, now.isoformat(), remind_after))
+    con.execute("INSERT INTO followups (ts, to_email, subject, sent_ts, remind_after, user_id) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (now.isoformat(), to_email, subject, now.isoformat(), remind_after, cur_uid()))
     con.commit()
     con.close()
 
@@ -657,7 +904,8 @@ def followup_list_open() -> list[dict]:
     con = sqlite3.connect(DB_PATH)
     rows = con.execute(
         "SELECT id, to_email, subject, sent_ts, remind_after, nudged "
-        "FROM followups WHERE done = 0 ORDER BY id").fetchall()
+        "FROM followups WHERE user_id = ? AND done = 0 ORDER BY id",
+        (cur_uid(),)).fetchall()
     con.close()
     return [{"id": i, "to_email": e, "subject": s, "sent_ts": st,
              "remind_after": ra, "nudged": n} for i, e, s, st, ra, n in rows]
@@ -679,12 +927,13 @@ def followup_mark_nudged(id_: int) -> None:
 
 
 def load_history(limit: int = HISTORY_LOAD) -> list[dict]:
-    """Laad de laatste berichten als gespreksgeheugen (oud -> nieuw)."""
+    """Laad de laatste berichten als gespreksgeheugen (oud -> nieuw) van de
+    huidige gebruiker."""
     try:
         con = sqlite3.connect(DB_PATH)
         rows = con.execute(
-            "SELECT role, content FROM messages ORDER BY id DESC LIMIT ?",
-            (limit,)).fetchall()
+            "SELECT role, content FROM messages WHERE user_id=? ORDER BY id DESC LIMIT ?",
+            (cur_uid(), limit)).fetchall()
         con.close()
     except Exception as e:
         print(f"Geheugen laden faalde: {e}", file=sys.stderr)
@@ -695,8 +944,8 @@ def load_history(limit: int = HISTORY_LOAD) -> list[dict]:
 def save_turn(role: str, content: str) -> None:
     try:
         con = sqlite3.connect(DB_PATH)
-        con.execute("INSERT INTO messages (ts, role, content) VALUES (?, ?, ?)",
-                    (datetime.now(timezone.utc).isoformat(), role, content))
+        con.execute("INSERT INTO messages (ts, role, content, user_id) VALUES (?, ?, ?, ?)",
+                    (datetime.now(timezone.utc).isoformat(), role, content, cur_uid()))
         con.commit()
         con.close()
     except Exception as e:
@@ -1027,13 +1276,18 @@ SEND_TOOL = {
 }
 
 
-def _build_system(context: str, agenda: str, session_drafts: list[dict]) -> str:
+def _dynamic_context(context: str, agenda: str, session_drafts: list[dict]) -> str:
+    """Het wisselende deel van de systeemprompt (tijd, agenda, taken, mail).
+    Staat los van SYSTEM_PROMPT zodat dat constante deel gecachet kan worden."""
     now = datetime.now(LOCAL_TZ)
-    s = (SYSTEM_PROMPT
-         + f"\n\nHuidige datum/tijd: {now.strftime('%A %d-%m-%Y %H:%M')} "
+    _u = get_user(cur_uid())
+    _name = _u["name"] if _u else "Ko"
+    s = (f"Je praat nu met {_name}. Noem de gebruiker bij deze naam en ga uit van "
+         f"ZIJN/HAAR eigen agenda, mail, contacten en taken (niet die van iemand anders).\n\n"
+         f"Huidige datum/tijd: {now.strftime('%A %d-%m-%Y %H:%M')} "
          f"({TIMEZONE}, offset {now.strftime('%z')}). Reken afspraaktijden in DEZE "
          f"tijdzone en gebruik deze offset in de ISO-tijden (bijv. ...T15:00:00{now.strftime('%z')[:3]}:00)."
-         + "\n\n--- Je agenda (gebruik dit om 'ben ik druk?' te beantwoorden) ---\n"
+         + "\n\n--- De agenda (gebruik dit om 'ben ik druk?' te beantwoorden) ---\n"
          + agenda
          + "\n\n--- Openstaande taken van Ko ---\n" + todos_context()
          + "\n\n--- " + features_status()
@@ -1043,7 +1297,36 @@ def _build_system(context: str, agenda: str, session_drafts: list[dict]) -> str:
         for i, d in enumerate(session_drafts, 1):
             s += (f"{i}. account={d.get('account')} aan={d.get('to')} "
                   f"onderwerp={d.get('subject')}\n   tekst: {d.get('body')}\n")
+    if _get_setting("lang", "nl") == "en":
+        s += ("\n\n--- LANGUAGE ---\nKo has set the app language to English. Write all "
+              "your replies to Ko in English. Assume Ko writes to you in English; never "
+              "translate his words to Dutch. Keep the same helpful, concise style.")
     return s
+
+
+def _build_system(context: str, agenda: str, session_drafts: list[dict]) -> str:
+    return SYSTEM_PROMPT + "\n\n" + _dynamic_context(context, agenda, session_drafts)
+
+
+def _system_blocks(context: str, agenda: str, session_drafts: list[dict]) -> list[dict]:
+    """Systeemprompt als blokken: constante kop gecachet, wisselend deel niet."""
+    return [
+        {"type": "text", "text": SYSTEM_PROMPT,
+         "cache_control": {"type": "ephemeral"}},
+        {"type": "text", "text": _dynamic_context(context, agenda, session_drafts)},
+    ]
+
+
+def _cached_tools() -> list[dict]:
+    """ALL_TOOLS met een cache-marker op het laatste blok, zodat het (constante,
+    grote) tool-schema gecachet wordt en niet elke beurt opnieuw verwerkt hoeft."""
+    if not ALL_TOOLS:
+        return ALL_TOOLS
+    tools = list(ALL_TOOLS)
+    last = dict(tools[-1])
+    last["cache_control"] = {"type": "ephemeral"}
+    tools[-1] = last
+    return tools
 
 
 def _messages_create(client, **kwargs):
@@ -1194,12 +1477,13 @@ def handle(client: anthropic.Anthropic, history: list[dict], message: str,
     """Verwerk Ko's bericht; Able mag tools ketenen (bijv. eerst contact opzoeken,
     dan meeting plannen). Geeft de uiteindelijke tekst voor Telegram terug."""
     messages = history + [{"role": "user", "content": message}]
-    system = _build_system(context, agenda, session_drafts)
+    system = _system_blocks(context, agenda, session_drafts)
+    tools = _cached_tools()
     final_text = ""
     for _ in range(6):
         resp = _messages_create(
-            client, model=CLAUDE_MODEL, max_tokens=1500, system=system,
-            tools=ALL_TOOLS, messages=messages)
+            client, model=CLAUDE_MODEL, max_tokens=900, system=system,
+            tools=tools, messages=messages)
         text = "".join(b.text for b in resp.content if b.type == "text").strip()
         if text:
             final_text = text
@@ -1213,6 +1497,32 @@ def handle(client: anthropic.Anthropic, history: list[dict], message: str,
             results.append({"type": "tool_result", "tool_use_id": tu.id, "content": out})
         messages.append({"role": "user", "content": results})
     return final_text or "Genoteerd, Ko."
+
+
+def handle_stream(client: anthropic.Anthropic, history: list[dict], message: str,
+                  context: str, agenda: str, session_drafts: list[dict],
+                  accounts_by_name: dict):
+    """Zelfde als handle(), maar levert de tekst stukje-bij-beetje (streaming) op
+    zodat de app het antwoord al ziet terwijl Able nog typt. Yield't tekst-deltas."""
+    messages = history + [{"role": "user", "content": message}]
+    system = _system_blocks(context, agenda, session_drafts)
+    tools = _cached_tools()
+    for _ in range(6):
+        with client.messages.stream(
+                model=CLAUDE_MODEL, max_tokens=900, system=system,
+                tools=tools, messages=messages) as stream:
+            for delta in stream.text_stream:
+                yield delta
+            final = stream.get_final_message()
+        tool_uses = [b for b in final.content if b.type == "tool_use"]
+        if not tool_uses:
+            return
+        messages.append({"role": "assistant", "content": final.content})
+        results = []
+        for tu in tool_uses:
+            out = execute_tool(tu.name, tu.input, accounts_by_name, session_drafts)
+            results.append({"type": "tool_result", "tool_use_id": tu.id, "content": out})
+        messages.append({"role": "user", "content": results})
 
 
 def process(client, accounts_by_name, message: str, context: str, agenda: str,

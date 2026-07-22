@@ -1,0 +1,1705 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no, interactive-widget=resizes-content">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#F7F9E1">
+<meta name="apple-mobile-web-app-title" content="Able">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+<link rel="apple-touch-icon" href="/favicon-180.png">
+<title>Able</title>
+<style>
+  :root {
+    --white:#FFFFFF; --ink:#101012; --black:#0B0B0C;
+    --gray:#707076; --gray2:#9A9AA0; --soft:#F6F6F8; --soft2:#EFEFF2;
+    --line: rgba(16,16,18,.08); --hair: rgba(16,16,18,.06);
+    --blue:#3D86FF;
+    --grotesk:"Helvetica Neue", Helvetica, Arial, sans-serif;
+    --ease: cubic-bezier(.32,.72,.25,1.05);
+    --tscale:1;
+  }
+  :root[data-theme="dark"] {
+    --white:#0C0C0F; --ink:#F3F3F5; --black:#F3F3F5;
+    --gray:#9C9CA3; --gray2:#6A6A70; --soft:#19191C; --soft2:#26262B;
+    --line: rgba(255,255,255,.11); --hair: rgba(255,255,255,.07);
+  }
+  :root[data-theme="dark"] .seg button.active { background:#3A3A40; color:#FFFFFF; box-shadow:none; }
+  :root[data-theme="dark"] .sicon { background:#2A2A30; color:#F3F3F5; }
+  /* Meadow — paper/teal palet (licht) */
+  :root[data-theme="meadow"] {
+    --white:#F7F9E1; --ink:#204654; --black:#204654;
+    --gray:#557569; --gray2:#2E6B5B; --soft:#ECF1D2; --soft2:#E1E8C1;
+    --line: rgba(32,70,84,.13); --hair: rgba(32,70,84,.07);
+    --blue:#35708A;
+  }
+  /* Meadow nacht — omgekeerd (teal-donker met paper) */
+  :root[data-theme="meadow-dark"] {
+    --white:#1B3E4B; --ink:#F4F7DE; --black:#F4F7DE;
+    --gray:#9FC1B9; --gray2:#79A096; --soft:#26505E; --soft2:#325E6E;
+    --line: rgba(244,247,222,.13); --hair: rgba(244,247,222,.07);
+    --blue:#CAFFA6;
+  }
+  :root[data-theme="meadow-dark"] .seg button.active { background:#3C6C7E; color:#F4F7DE; box-shadow:none; }
+  :root[data-theme="meadow-dark"] .sicon { background:#356072; color:#F4F7DE; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html { height:100%; background-color:var(--white);
+    background-image: radial-gradient(120% 80% at 50% -15%, color-mix(in srgb, var(--ink) 4%, var(--white)), var(--white) 55%);
+    background-attachment:fixed; }
+  body { margin:0; min-height:100%; color:var(--ink); font-family:var(--grotesk);
+    background:transparent; overscroll-behavior:none; -webkit-text-size-adjust:100%; }
+  button { font-family:var(--grotesk); color:var(--ink); }
+  .hidden { display:none !important; }
+
+  /* ===== Desktop: app in een iPhone 17-frame ===== */
+  .dfstage { position:fixed; inset:0; overflow:hidden;
+    background: radial-gradient(130% 100% at 50% -10%, #EEF1F5, #D8DDE5 72%); }
+  .dfphone { position:absolute; top:50%; left:50%; width:428px; height:900px; border-radius:64px; background:#0A0A0C;
+    padding:13px; transform-origin:center; transform:translate(-50%,-50%);
+    box-shadow: 0 50px 100px -32px rgba(20,28,40,.55), 0 14px 32px rgba(20,28,40,.28),
+      inset 0 0 0 2px #26262b, inset 0 0 0 8px #050506; }
+  .dfscreen { width:402px; height:874px; border:0; border-radius:50px; background:#fff; display:block; }
+  .dfisland { position:absolute; top:25px; left:50%; transform:translateX(-50%);
+    width:120px; height:35px; background:#000; border-radius:19px; z-index:2; }
+  .dfbtn { position:absolute; width:3px; background:#1b1b1f; border-radius:2px; }
+  .dfbtn.r { right:-3px; } .dfbtn.l { left:-3px; }
+  .dfbtn.b1 { top:190px; height:34px; } .dfbtn.b2 { top:250px; height:62px; } .dfbtn.b3 { top:214px; height:92px; }
+  @media (prefers-color-scheme: dark) {
+    .dfstage { background: radial-gradient(130% 100% at 50% -10%, #24272D, #131519 72%); }
+  }
+  /* Als de app in het frame draait: extra ruimte bovenaan onder de Dynamic Island. */
+  :root.inframe .view { padding-top: 54px; }
+  :root.inframe .voicescreen { padding-top: 46px; }
+  :root.inframe .subpage { padding-top: 44px; }
+  :root.inframe .login { padding-top: 96px; }
+
+  /* ===== Views ===== */
+  main { position:relative; z-index:1; min-height:100dvh; }
+  .view { position:fixed; inset:0; display:flex; flex-direction:column;
+    padding: calc(env(safe-area-inset-top) + 18px) 20px calc(env(safe-area-inset-bottom) + 112px);
+    opacity:0; transform: translateY(14px); pointer-events:none;
+    transition: opacity .35s var(--ease), transform .42s var(--ease); }
+  .view.active { opacity:1; transform:none; pointer-events:auto; }
+
+  .eyebrow { font-size:calc(11.5px*var(--tscale)); font-weight:700; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--gray2); margin:2px 2px 6px; }
+  .lt { font-size:calc(31px*var(--tscale)); font-weight:700; letter-spacing:-.035em; margin:0 2px 16px; flex:none; }
+  .view.active .lt { animation: rise .55s var(--ease) both; }
+  .view.active .eyebrow { animation: rise .5s var(--ease) both; }
+  @keyframes rise { from { opacity:0; transform:translateY(16px); } }
+
+  .scroller { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; min-height:0;
+    padding-bottom:8px; scrollbar-width:none; }
+  .scroller::-webkit-scrollbar { display:none; }
+
+  /* ===== Home ===== */
+  .hero { display:block; width:100%; text-align:left; background:var(--white);
+    border:1px solid var(--line); border-radius:24px; padding:18px 20px 17px; cursor:pointer;
+    margin-bottom:12px; transition: transform .25s var(--ease);
+    animation: rise .55s var(--ease) .05s both; }
+  .hero:active { transform:scale(.985); }
+  .hero .he { font-size:calc(11px*var(--tscale)); font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--gray2); }
+  .hero .row { display:flex; align-items:baseline; gap:14px; margin-top:8px; }
+  .hero .time { font-size:calc(40px*var(--tscale)); font-weight:700; letter-spacing:-.04em; font-variant-numeric:tabular-nums; line-height:1; }
+  .hero .tt { min-width:0; }
+  .hero .title { font-size:calc(16px*var(--tscale)); font-weight:700; letter-spacing:-.015em; line-height:1.25;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .hero .day { font-size:calc(13px*var(--tscale)); color:var(--gray); margin-top:2px; text-transform:capitalize; }
+  .hero.empty .time { font-size:calc(22px*var(--tscale)); letter-spacing:-.02em; }
+
+  .glance { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:20px; }
+  .gt { background:var(--soft); border:none; border-radius:20px; padding:14px 8px 12px; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; gap:2px;
+    transition: transform .25s var(--ease), background .25s ease; }
+  .gt:active { transform:scale(.94); background:var(--soft2); }
+  .gt .n { font-size:calc(26px*var(--tscale)); font-weight:700; letter-spacing:-.03em; font-variant-numeric:tabular-nums; }
+  .gt .l { font-size:calc(11px*var(--tscale)); font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--gray2); }
+  .view.active .glance .gt { animation: rise .5s var(--ease) backwards; }
+  .view.active .glance .gt:nth-child(1){ animation-delay:.1s }
+  .view.active .glance .gt:nth-child(2){ animation-delay:.15s }
+  .view.active .glance .gt:nth-child(3){ animation-delay:.2s }
+
+  .shead { font-size:calc(11.5px*var(--tscale)); font-weight:700; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--gray2); margin:4px 2px 10px; }
+  .sugg { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:22px; }
+  .sugg button { background:var(--white); border:1px solid var(--line); color:var(--ink);
+    font-size:calc(13.5px*var(--tscale)); font-weight:600; padding:10px 15px; border-radius:999px;
+    cursor:pointer; transition: transform .22s var(--ease), background .2s ease; }
+  .sugg button:active { transform:scale(.93); background:var(--soft); }
+  .view.active .sugg button { animation: rise .45s var(--ease) backwards; }
+  .view.active .sugg button:nth-child(1){animation-delay:.22s} .view.active .sugg button:nth-child(2){animation-delay:.27s}
+  .view.active .sugg button:nth-child(3){animation-delay:.32s} .view.active .sugg button:nth-child(4){animation-delay:.37s}
+
+  .recent { border:1px solid var(--line); border-radius:22px; background:var(--white); overflow:hidden;
+    animation: rise .55s var(--ease) .28s both; }
+  .ritem { padding:14px 16px; border-bottom:1px solid var(--hair); cursor:pointer; display:flex;
+    align-items:center; gap:12px; transition: background .2s ease; }
+  .ritem:active { background:var(--soft); }
+  .ritem:last-child { border-bottom:none; }
+  .ritem .tx { flex:1; min-width:0; }
+  .ritem .t { font-size:calc(14.5px*var(--tscale)); font-weight:700; letter-spacing:-.01em; margin-bottom:2px; color:var(--ink);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ritem .p { font-size:calc(13px*var(--tscale)); color:var(--gray); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ritem .chev { flex:none; color:var(--gray2); }
+  .ritem .chev svg { width:15px; height:15px; }
+  .rempty { padding:20px; text-align:center; color:var(--gray2); font-size:calc(14px*var(--tscale)); }
+
+  /* ===== Segmented control ===== */
+  .seg { display:flex; background:var(--soft); border-radius:999px; padding:4px; margin-bottom:16px; flex:none; }
+  .seg button { flex:1; border:none; background:transparent; color:var(--gray); font-size:calc(14px*var(--tscale));
+    font-weight:600; padding:10px 0; border-radius:999px; cursor:pointer;
+    transition: all .3s var(--ease); }
+  .seg button.active { background:var(--white); color:var(--ink);
+    box-shadow: 0 2px 10px -4px rgba(0,0,0,.18); }
+
+  /* ===== Lijsten ===== */
+  .dayhead { font-size:calc(12px*var(--tscale)); font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--gray2); margin:16px 2px 8px; }
+  .dayhead:first-child { margin-top:0; }
+  .stack { display:flex; flex-direction:column; gap:8px; }
+  .card { background:var(--soft); border:none; border-radius:20px;
+    padding:14px 16px; display:flex; align-items:center; gap:14px;
+    animation: rise .5s var(--ease) backwards;
+    transition: transform .2s var(--ease); }
+  .card:active { transform:scale(.985); }
+  .stack .card:nth-child(1){animation-delay:.03s} .stack .card:nth-child(2){animation-delay:.07s}
+  .stack .card:nth-child(3){animation-delay:.11s} .stack .card:nth-child(4){animation-delay:.15s}
+  .stack .card:nth-child(5){animation-delay:.19s} .stack .card:nth-child(6){animation-delay:.23s}
+  .card .time { flex:none; font-size:calc(15px*var(--tscale)); font-weight:700; font-variant-numeric:tabular-nums;
+    min-width:48px; letter-spacing:-.01em; }
+  .card .title { font-size:calc(15px*var(--tscale)); font-weight:600; letter-spacing:-.01em; flex:1; min-width:0;
+    overflow:hidden; text-overflow:ellipsis; }
+  .card .sub { font-size:calc(12.5px*var(--tscale)); color:var(--gray); margin-top:2px; }
+  .empty { text-align:center; color:var(--gray2); font-size:calc(14px*var(--tscale)); padding:30px 20px; }
+
+  .addrow { display:flex; gap:8px; margin-bottom:12px; }
+  .addrow input { flex:1; min-width:0; background:var(--soft); border:1px solid transparent;
+    color:var(--ink); font-family:var(--grotesk); font-size:calc(15px*var(--tscale)); padding:12px 16px;
+    border-radius:999px; outline:none; }
+  .addrow input::placeholder { color:var(--gray2); }
+  .addrow input:focus { border-color:var(--ink); background:var(--white); }
+  .addrow button { width:46px; height:46px; flex:none; border:none; border-radius:50%;
+    background:var(--black); color:var(--white); cursor:pointer; display:grid; place-items:center;
+    transition: transform .2s var(--ease); }
+  .addrow button:active { transform:scale(.9); }
+  .addrow button svg { width:20px; height:20px; }
+
+  .check { width:25px; height:25px; flex:none; border-radius:50%; border:1.8px solid var(--ink);
+    background:transparent; cursor:pointer; display:grid; place-items:center; color:transparent;
+    transition: all .25s var(--ease); }
+  .check svg { width:13px; height:13px; }
+  .card.done { opacity:0; transform:translateX(30px) scale(.96); transition:all .38s var(--ease); }
+  .card.done .check { background:var(--ink); border-color:var(--ink); color:var(--white); }
+
+  /* ===== Mail ===== */
+  .mailsum { font-size:calc(15px*var(--tscale)); color:var(--gray); margin:0 2px 16px; line-height:1.5;
+    animation: rise .5s var(--ease) .05s both; }
+  .avatar { width:40px; height:40px; flex:none; border-radius:50%; background:var(--soft2);
+    display:grid; place-items:center; font-size:calc(15px*var(--tscale)); font-weight:700; text-transform:uppercase; }
+  .badge { flex:none; background:var(--white); border:1px solid var(--line); color:var(--ink);
+    font-size:calc(12px*var(--tscale)); font-weight:700; border-radius:999px; padding:5px 10px;
+    font-variant-numeric:tabular-nums; }
+  .card.mailrow { background:var(--white); border:1px solid var(--line); cursor:pointer; }
+
+  /* ===== Meer ===== */
+  .srow { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .srow .lab { font-size:calc(14.5px*var(--tscale)); font-weight:600; flex:1; letter-spacing:-.01em; }
+  .toggle { position:relative; width:50px; height:31px; flex:none; border-radius:999px; border:none;
+    background:var(--soft2); cursor:pointer; transition: background .3s var(--ease); }
+  .toggle::after { content:""; position:absolute; top:3px; left:3px; width:25px; height:25px;
+    border-radius:50%; background:#fff; box-shadow:0 2px 6px rgba(0,0,0,.22);
+    transition: transform .3s var(--ease); }
+  .toggle.on { background:var(--ink); }
+  .toggle.on::after { transform:translateX(19px); }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:6px; }
+  .chip { border:1px solid var(--line); background:var(--white); color:var(--ink);
+    font-size:calc(13.5px*var(--tscale)); font-weight:600; padding:9px 16px;
+    border-radius:999px; cursor:pointer; transition:all .22s var(--ease); }
+  .chip.on { background:var(--ink); border-color:var(--ink); color:var(--white); }
+  .voicechips .chip { display:inline-flex; flex-direction:column; align-items:center; gap:1px;
+    padding:9px 18px; line-height:1.15; }
+  .voicechips .chip .vn { font-size:calc(14px*var(--tscale)); font-weight:600; }
+  .voicechips .chip .vg { font-size:calc(10.5px*var(--tscale)); font-weight:500; letter-spacing:.02em; opacity:.55; text-transform:lowercase; }
+  .logout { margin-top:22px; background:var(--white); border:1px solid var(--line); color:#B4432F;
+    font-weight:700; font-size:calc(14.5px*var(--tscale)); padding:14px; border-radius:18px; cursor:pointer; width:100%; }
+  .about { text-align:center; color:var(--gray2); font-size:calc(12px*var(--tscale)); margin-top:18px; line-height:1.6; }
+
+  /* ===== Chat ===== */
+  #view-chat { padding-bottom: calc(env(safe-area-inset-bottom) + 12px); background:var(--white); }
+  .chead { display:flex; align-items:center; gap:10px; margin-bottom:6px; flex:none; }
+  .cback { width:40px; height:40px; flex:none; border-radius:50%; border:1px solid var(--line); background:var(--white);
+    display:grid; place-items:center; cursor:pointer; color:var(--ink); }
+  .cback svg { width:18px; height:18px; }
+  .chead .ct { flex:1; text-align:center; font-size:calc(15.5px*var(--tscale)); font-weight:700; letter-spacing:-.01em; margin-right:40px; }
+  /* "able" woordmerk-lettertype (afgerond), altijd in de themakleur */
+  .wordmark { font-family:'Baloo 2','Quicksand',ui-rounded,system-ui,-apple-system,sans-serif;
+    font-weight:700; letter-spacing:.005em; color:var(--ink); text-transform:lowercase; }
+  .ct.wordmark { font-size:calc(23px*var(--tscale)); letter-spacing:.01em; line-height:1; }
+  .mark.wordmark { letter-spacing:.01em; }
+  .msgs { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; display:flex; flex-direction:column;
+    gap:3px; padding:6px 0 10px; min-height:0; scrollbar-width:none; }
+  .msgs::-webkit-scrollbar { display:none; }
+  .daychip { align-self:center; background:var(--soft); color:var(--gray); font-size:calc(11.5px*var(--tscale)); font-weight:600;
+    border-radius:999px; padding:6px 13px; margin:6px 0 12px; flex:none; }
+  .b { max-width:82%; padding:11px 15px; font-size:calc(15px*var(--tscale)); line-height:1.45; letter-spacing:-.005em;
+    animation: bin .35s var(--ease) backwards; white-space:pre-wrap; word-wrap:break-word; }
+  @keyframes bin { from { opacity:0; transform:translateY(8px); } }
+  .b.user { align-self:flex-end; background:var(--black); color:var(--white);
+    border-radius:20px 20px 6px 20px; }
+  .b.ai { align-self:flex-start; background:var(--soft); color:var(--ink);
+    border-radius:20px 20px 20px 6px; }
+  .bt { font-size:calc(10.5px*var(--tscale)); color:var(--gray2); margin:3px 6px 9px; flex:none; }
+  .bt.user { align-self:flex-end; }
+  .bt.ai { align-self:flex-start; }
+  .typing { align-self:flex-start; display:flex; gap:5px; background:var(--soft); border-radius:20px 20px 20px 6px;
+    padding:15px 17px; }
+  .typing i { width:6px; height:6px; border-radius:50%; background:var(--gray2); animation: tdot 1.2s ease-in-out infinite; }
+  .typing i:nth-child(2){ animation-delay:.15s } .typing i:nth-child(3){ animation-delay:.3s }
+  @keyframes tdot { 0%,100%{ transform:translateY(0); opacity:.5;} 40%{ transform:translateY(-4px); opacity:1;} }
+  .cempty { margin-top:auto; display:flex; flex-direction:column; align-items:center; gap:16px; padding:20px 0 6px; }
+  .cempty .q { font-size:calc(19px*var(--tscale)); font-weight:700; letter-spacing:-.02em; color:var(--ink); }
+  .cempty .sugg { justify-content:center; margin:0; }
+
+  .chatbar { display:flex; gap:8px; align-items:center; flex:none; padding-top:8px; }
+  .chatbar input { flex:1; min-width:0; background:var(--soft); border:1px solid transparent;
+    color:var(--ink); font-family:var(--grotesk); font-size:calc(16px*var(--tscale)); padding:14px 18px;
+    border-radius:999px; outline:none; }
+  .chatbar input::placeholder { color:var(--gray2); }
+  .chatbar input:focus { border-color:var(--ink); background:var(--white); }
+  .chatbar button { width:48px; height:48px; flex:none; border:none; border-radius:50%; cursor:pointer;
+    display:grid; place-items:center; transition: transform .2s var(--ease); }
+  .chatbar button:active { transform:scale(.9); }
+  .chatbar button svg { width:20px; height:20px; }
+  .chatbar .cmic { background:var(--black); color:var(--white); }
+  .chatbar .csend { background:var(--soft); color:var(--ink); border:1px solid var(--line); }
+  .chatbar .csend:disabled { opacity:.4; }
+  body[data-view="chat"] .tabbar { opacity:0; pointer-events:none; transform:translateX(-50%) translateY(20px); }
+
+  /* ===== Voice ===== */
+  .voicescreen { position:fixed; inset:0; z-index:8; background:var(--white);
+    display:flex; flex-direction:column; align-items:center;
+    padding: calc(env(safe-area-inset-top) + 14px) 24px calc(env(safe-area-inset-bottom) + 24px);
+    transform:translateY(100%); transition: transform .5s var(--ease); }
+  .voicescreen.open { transform:none; }
+  .vhead { width:100%; display:flex; align-items:center; flex:none; }
+  .vhead .ct { flex:1; text-align:center; font-size:calc(15.5px*var(--tscale)); font-weight:700; letter-spacing:-.01em; margin-right:40px; }
+  .vmid { flex:1; position:relative; width:100%; min-height:0; }
+  /* De bol: exact gecentreerd, staat stil. */
+  #orb { position:absolute; left:50%; top:40%; width:min(52vw, 210px); aspect-ratio:1;
+    transform:translate(-50%,-50%); border-radius:50%; cursor:pointer;
+    background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--blue) 42%, #fff) 0%, var(--blue) 58%, color-mix(in srgb, var(--blue) 62%, #000) 100%);
+    box-shadow: 0 18px 50px -22px color-mix(in srgb, var(--blue) 45%, transparent); }
+  /* Halo direct om de bol (niet de achtergrond) */
+  #orb::after { content:""; position:absolute; inset:-6px; border-radius:50%; opacity:0;
+    box-shadow: 0 0 44px 14px color-mix(in srgb, var(--blue) 42%, transparent),
+                0 0 110px 46px color-mix(in srgb, var(--blue) 18%, transparent);
+    transition: opacity .45s ease; pointer-events:none; }
+  body.listening #orb { animation: vbreathe 4s ease-in-out infinite; }
+  @keyframes vbreathe {
+    0%,100%{ transform:translate(-50%,-50%) scale(1); }
+    50%{ transform:translate(-50%,-50%) scale(1.025); } }
+  body.thinking #orb::after { opacity:.3; }
+  body.speaking #orb::after { opacity:1; animation: vhalo 1.1s ease-in-out infinite; }
+  @keyframes vhalo { 0%,100%{ opacity:.65; } 50%{ opacity:1; } }
+  .vstatus { position:absolute; left:0; right:0; top:calc(40% + min(26vw,105px) + 26px);
+    text-align:center; font-size:calc(14.5px*var(--tscale)); color:var(--gray); font-weight:500; }
+  .vsay { position:absolute; left:8px; right:8px; top:calc(40% + min(26vw,105px) + 58px);
+    max-height:22dvh; overflow-y:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;
+    font-size:calc(17px*var(--tscale)); font-weight:600; letter-spacing:-.015em; line-height:1.45; text-align:center;
+    text-wrap:balance; color:var(--ink); }
+  .vsay::-webkit-scrollbar { display:none; }
+  .vsay.user { color:var(--gray); font-weight:500; }
+  .vsay:empty { display:none; }
+  .vtochat { flex:none; margin:0 0 20px; border:1px solid var(--line); background:var(--white);
+    color:var(--ink); font-family:var(--grotesk); font-size:calc(14px*var(--tscale)); font-weight:600; letter-spacing:-.01em;
+    padding:12px 22px; border-radius:999px; cursor:pointer;
+    box-shadow: 0 6px 18px -12px rgba(0,0,0,.4);
+    transition: transform .22s var(--ease), background .3s ease; }
+  .vtochat:active { transform:scale(.96); }
+  /* Spraakbudget-balk (groen -> geel -> rood) */
+  .vbudget { flex:none; width:100%; max-width:320px; margin:0 auto; }
+  .vbudget .brow { display:flex; justify-content:space-between; align-items:baseline;
+    font-size:calc(12px*var(--tscale)); color:var(--gray); margin:0 2px 6px; }
+  .vbudget .bamt { font-weight:600; color:var(--ink); font-variant-numeric:tabular-nums; }
+  .vbudget .btrack { height:7px; border-radius:99px; background:var(--soft2); overflow:hidden; }
+  .vbudget .bfill { height:100%; width:0; border-radius:99px;
+    transition: width .5s var(--ease), background-color .4s ease; }
+  .vbudget.full .bamt { color:#D8503F; }
+  .vctrl { display:flex; align-items:center; gap:32px; flex:none; padding-top:8px; }
+  .vbtn { width:54px; height:54px; border-radius:50%; border:1px solid var(--line); background:var(--white);
+    color:var(--ink); cursor:pointer; display:grid; place-items:center;
+    transition: transform .22s var(--ease), background .3s ease; }
+  .vbtn:active { transform:scale(.9); }
+  .vbtn svg { width:21px; height:21px; }
+  .vbtn.vmicbig { width:72px; height:72px; background:var(--black); color:var(--white); border:none; }
+  .vbtn.vmicbig svg { width:27px; height:27px; }
+  .vbtn.vmicbig.muted { background:#B4432F; }
+
+  /* ===== Tabbar ===== */
+  .tabbar { position:fixed; z-index:6; left:50%; transform:translateX(-50%);
+    bottom: calc(env(safe-area-inset-bottom) + 6px);
+    display:flex; align-items:center; gap:2px; padding:9px 13px;
+    background: color-mix(in srgb, var(--white) 82%, transparent); border:1px solid var(--hair); border-radius:32px;
+    backdrop-filter: blur(26px) saturate(1.5); -webkit-backdrop-filter: blur(26px) saturate(1.5);
+    box-shadow: 0 18px 50px -18px rgba(20,28,40,.30), 0 2px 8px rgba(20,28,40,.06);
+    transition: opacity .35s ease, transform .45s var(--ease); }
+  .tab { border:none; background:transparent; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; gap:3px; width:56px; padding:7px 0 5px;
+    color:var(--gray2); border-radius:18px; transition: all .3s var(--ease); }
+  .tab svg { width:21px; height:21px; transition: transform .3s var(--ease); }
+  .tab span { font-size:calc(10px*var(--tscale)); font-weight:600; letter-spacing:.01em; }
+  .tab.active { color:var(--ink); }
+  .tab.active svg { transform:translateY(-1px) scale(1.1); }
+  .tab:active svg { transform:scale(.85); }
+  .mictab { width:64px; height:64px; margin:-22px 6px 0; flex:none; border:none; border-radius:22px;
+    background: linear-gradient(155deg, color-mix(in srgb, var(--blue) 78%, #fff), var(--blue) 70%, color-mix(in srgb, var(--blue) 70%, #000));
+    color:#fff; cursor:pointer; display:grid; place-items:center;
+    box-shadow: 0 14px 30px -8px color-mix(in srgb, var(--blue) 55%, transparent),
+      0 0 0 5px color-mix(in srgb, var(--white) 90%, transparent);
+    transition: transform .25s var(--ease); }
+  .mictab svg { width:29px; height:29px; }
+  .mictab:active { transform:scale(.92); }
+  .mictab:active { transform:scale(.9); }
+
+  /* ===== Login ===== */
+  .login { position:fixed; inset:0; z-index:10; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:20px; background:var(--white); padding:24px; }
+  .login .mark { font-size:calc(38px*var(--tscale)); font-weight:700; letter-spacing:-.04em; }
+  .login p { color:var(--gray); margin:0; font-size:calc(14px*var(--tscale)); }
+  .login form { display:flex; flex-direction:column; gap:12px; width:100%; max-width:300px; }
+  .login input { background:var(--soft); border:1px solid transparent; color:var(--ink);
+    font-family:var(--grotesk); font-size:calc(16px*var(--tscale)); padding:15px 18px; border-radius:14px; outline:none; text-align:center; }
+  .login input::placeholder { color:var(--gray2); }
+  .login input:focus { border-color:var(--ink); background:var(--white); }
+  .login button { background:var(--black); color:var(--white); border:none; font-weight:700; font-size:calc(15px*var(--tscale));
+    padding:15px; border-radius:14px; cursor:pointer; }
+  .login .err { color:#B4432F; font-size:calc(13px*var(--tscale)); min-height:16px; }
+
+  /* ===== Welkom / koppel Google ===== */
+  .onboard { position:fixed; inset:0; z-index:9; display:flex; align-items:center; justify-content:center;
+    padding: calc(env(safe-area-inset-top) + 24px) 24px calc(env(safe-area-inset-bottom) + 24px);
+    background: radial-gradient(120% 80% at 50% -10%, color-mix(in srgb, var(--ink) 5%, var(--white)), var(--white) 60%); }
+  .onboard .obinner { width:100%; max-width:340px; display:flex; flex-direction:column; align-items:center; text-align:center; }
+  .onboard .mark { font-size:calc(40px*var(--tscale)); margin-bottom:14px; color:var(--ink); }
+  .obtitle { font-size:calc(26px*var(--tscale)); font-weight:700; letter-spacing:-.02em; color:var(--ink); margin:0 0 8px; }
+  .obtext { font-size:calc(15px*var(--tscale)); line-height:1.55; color:var(--gray); margin:0 0 26px; }
+  .obconnect { display:inline-flex; align-items:center; justify-content:center; gap:12px; width:100%;
+    background:#fff; color:#1f1f1f; border:1px solid #dadce0; border-radius:14px; cursor:pointer;
+    font-family:var(--grotesk); font-weight:600; font-size:calc(15.5px*var(--tscale)); padding:15px 18px;
+    box-shadow: 0 2px 10px -6px rgba(0,0,0,.3); transition: transform .18s var(--ease); }
+  .obconnect:active { transform:scale(.98); }
+  .obconnect .obg { width:21px; height:21px; flex:none; }
+  .oblater { margin-top:16px; background:transparent; border:none; cursor:pointer; font-family:var(--grotesk);
+    color:var(--gray); font-weight:600; font-size:calc(14px*var(--tscale)); padding:8px; }
+  .oblater:active { opacity:.6; }
+  .oblogout { margin-top:2px; background:transparent; border:none; cursor:pointer; font-family:var(--grotesk);
+    color:var(--gray2); font-weight:500; font-size:calc(13px*var(--tscale)); padding:6px; text-decoration:underline; }
+  .oblogout:active { opacity:.6; }
+
+  /* ===== Settings (iOS-stijl) ===== */
+  .sgrouptitle { font-size:calc(12px*var(--tscale)); font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--gray2); margin:20px 4px 8px; }
+  .sgrouptitle:first-child { margin-top:0; }
+  .sgroup { background:var(--soft); border-radius:18px; overflow:hidden; }
+  .srowi { width:100%; display:flex; align-items:center; gap:13px; padding:12px 14px; cursor:pointer;
+    border:none; background:transparent; text-align:left; border-bottom:1px solid var(--hair);
+    transition: background .18s ease; }
+  .srowi:last-child { border-bottom:none; }
+  .srowi:active { background:var(--soft2); }
+  .sicon { width:30px; height:30px; flex:none; border-radius:9px; display:grid; place-items:center;
+    background:var(--ink); color:var(--white); }
+  .sicon svg { width:17px; height:17px; }
+  .srowi .slabel { flex:1; font-size:calc(15.5px*var(--tscale)); font-weight:600; letter-spacing:-.01em; color:var(--ink); }
+  .srowi .sval { font-size:calc(14px*var(--tscale)); color:var(--gray); text-transform:capitalize; }
+  .srowi .schev { color:var(--gray2); display:flex; }
+  .srowi .schev svg { width:16px; height:16px; }
+  .srowi.danger .slabel { color:#D8503F; }
+  .srowi.danger .sicon { background:#D8503F; }
+
+  /* Detail-subpagina (slide van rechts) */
+  .subpage { position:fixed; inset:0; z-index:7; background:var(--white);
+    display:flex; flex-direction:column;
+    padding: calc(env(safe-area-inset-top) + 14px) 20px calc(env(safe-area-inset-bottom) + 24px);
+    transform:translateX(100%); transition: transform .4s var(--ease); }
+  .subpage.open { transform:none; }
+  .subhead { display:flex; align-items:center; gap:10px; margin-bottom:14px; flex:none; }
+  .subhead .stitle { flex:1; text-align:center; font-size:calc(15.5px*var(--tscale)); font-weight:700; letter-spacing:-.01em; margin-right:40px; }
+  .subbody { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; min-height:0; scrollbar-width:none; }
+  .subbody::-webkit-scrollbar { display:none; }
+  .subbody .lt { font-size:calc(28px*var(--tscale)); margin:2px 2px 4px; }
+  .subnote { font-size:calc(13.5px*var(--tscale)); color:var(--gray); line-height:1.5; margin:0 2px 18px; }
+
+  .swatches { display:flex; gap:12px; margin-bottom:6px; }
+  .swatch { width:44px; height:44px; border-radius:50%; cursor:pointer; border:2px solid transparent;
+    position:relative; transition: transform .2s var(--ease); }
+  .swatch:active { transform:scale(.9); }
+  .swatch.on { border-color:var(--ink); }
+  .swatch.on::after { content:""; position:absolute; inset:-6px; border-radius:50%; border:1.5px solid var(--ink); opacity:.35; }
+  .themegrid { display:grid; grid-template-columns:repeat(3,1fr); gap:11px; margin-bottom:16px; }
+  .themecard { border:none; background:transparent; padding:0; cursor:pointer; display:flex; flex-direction:column; gap:7px; }
+  .themeprev { height:66px; border-radius:15px; border:1px solid var(--line); position:relative; overflow:hidden;
+    transition: box-shadow .2s var(--ease); }
+  .themeprev .bar { position:absolute; left:11px; top:13px; width:32px; height:6px; border-radius:3px; }
+  .themeprev .dot { position:absolute; left:11px; bottom:11px; width:19px; height:19px; border-radius:50%;
+    box-shadow: 0 2px 6px -2px rgba(0,0,0,.35); }
+  .themecard.on .themeprev { box-shadow: inset 0 0 0 3px var(--ink); border-color: var(--ink); }
+  .themecard.on .themelabel { color: var(--ink); font-weight:700; }
+  .themecard:active .themeprev { transform:scale(.96); }
+  .themelabel { font-size:calc(11.5px*var(--tscale)); font-weight:600; text-align:center; color:var(--ink);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  .fieldcard { background:var(--soft); border-radius:16px; padding:6px 4px; margin-bottom:12px; }
+  .field { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px;
+    border-bottom:1px solid var(--hair); }
+  .field:last-child { border-bottom:none; }
+  .field .fl { font-size:calc(14.5px*var(--tscale)); color:var(--ink); }
+  .field .fv { font-size:calc(14px*var(--tscale)); color:var(--gray); text-align:right; }
+  .field .dot { width:8px; height:8px; border-radius:50%; flex:none; }
+  .dot.ok { background:#34C759; } .dot.off { background:var(--gray2); }
+  .pwform { display:flex; flex-direction:column; gap:10px; }
+  .pwform input { background:var(--soft); border:1px solid transparent; color:var(--ink);
+    font-family:var(--grotesk); font-size:calc(16px*var(--tscale)); padding:14px 16px; border-radius:14px; outline:none; }
+  .pwform input:focus { border-color:var(--ink); background:var(--white); }
+  .btn-primary { background:var(--black); color:var(--white); border:none; font-weight:700; font-size:calc(15px*var(--tscale));
+    padding:14px; border-radius:14px; cursor:pointer; font-family:var(--grotesk); }
+  .btn-danger { background:var(--white); border:1px solid #D8503F; color:#D8503F; font-weight:700; font-size:calc(15px*var(--tscale));
+    padding:14px; border-radius:14px; cursor:pointer; font-family:var(--grotesk); width:100%; }
+  .msgline { font-size:calc(13px*var(--tscale)); min-height:16px; margin:2px 2px 0; }
+  .msgline.ok { color:#34C759; } .msgline.err { color:#D8503F; }
+
+  /* Services & mailboxen */
+  .svcgroup { display:flex; flex-direction:column; gap:9px; margin-bottom:10px; }
+  .svc { display:flex; align-items:center; gap:12px; background:var(--soft); border-radius:15px; padding:11px 13px; }
+  .svcicon { width:36px; height:36px; flex:none; border-radius:10px; display:grid; place-items:center; overflow:hidden;
+    background:#fff; box-shadow: inset 0 0 0 1px var(--line); }
+  .svcicon svg { width:23px; height:23px; }
+  .svctx { flex:1; min-width:0; }
+  .svcname { font-size:calc(14.5px*var(--tscale)); font-weight:600; color:var(--ink); letter-spacing:-.01em; }
+  .svcsub { font-size:calc(12px*var(--tscale)); color:var(--gray); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .svcpill { flex:none; font-size:calc(11.5px*var(--tscale)); font-weight:600; padding:5px 11px; border-radius:999px;
+    display:inline-flex; align-items:center; gap:6px; }
+  .svcpill .pdot { width:6px; height:6px; border-radius:50%; background:currentColor; }
+  .svcpill.on { color:#1E9E4A; background:color-mix(in srgb, #2FBF71 16%, transparent); }
+  .svcpill.off { color:var(--gray); background:var(--soft2); }
+  .svcadd { display:flex; align-items:center; gap:11px; width:100%; text-align:left; cursor:pointer;
+    background:transparent; border:1.5px dashed var(--line); border-radius:15px; padding:12px 13px;
+    color:var(--ink); font-weight:600; font-size:calc(14px*var(--tscale)); font-family:var(--grotesk);
+    transition: border-color .2s var(--ease), background .2s ease; }
+  .svcadd:active { transform:scale(.99); }
+  .svcadd .plus { width:26px; height:26px; flex:none; border-radius:8px; display:grid; place-items:center;
+    background:var(--soft2); color:var(--ink); font-size:calc(18px*var(--tscale)); line-height:1; }
+  .svcpanel { background:var(--soft); border-radius:14px; padding:6px; margin:-2px 0 10px; }
+  .svcopt { display:flex; align-items:center; gap:11px; padding:10px 10px; border-radius:11px; }
+  .svcopt + .svcopt { border-top:1px solid var(--hair); }
+  .svcopt .svcname { flex:1; }
+  .svcsoon { font-size:calc(11px*var(--tscale)); font-weight:600; color:var(--gray2);
+    background:var(--soft2); padding:3px 9px; border-radius:999px; }
+  .udel { flex:none; width:34px; height:34px; margin-left:2px; border:none; border-radius:10px;
+    background:transparent; color:var(--gray2); cursor:pointer; display:grid; place-items:center;
+    transition: color .2s ease, background .2s ease; }
+  .udel svg { width:19px; height:19px; }
+  .udel:hover, .udel:active { color:#D8503F; background:color-mix(in srgb, #D8503F 12%, transparent); }
+  .udel { flex:none; width:34px; height:34px; margin-left:2px; border:none; cursor:pointer;
+    border-radius:10px; background:transparent; color:var(--gray2); display:grid; place-items:center;
+    transition: background .2s ease, color .2s ease; }
+  .udel svg { width:19px; height:19px; }
+  .udel:hover, .udel:active { background:color-mix(in srgb, #D8503F 14%, transparent); color:#D8503F; }
+
+  @media (prefers-reduced-motion: reduce){
+    .card, .lt, .eyebrow, .sugg button, .hero, .glance .gt, .recent, .b, .typing i,
+    #orb, #orb::after, .mailsum { animation:none !important; }
+    .view, .voicescreen, .card.done, .toggle, .toggle::after, .chip, .tab, .tab svg, .seg button { transition:none !important; }
+  }
+</style>
+</head>
+<body data-view="able">
+  <audio id="remoteAudio" autoplay playsinline></audio>
+
+  <div class="login" id="login">
+    <div class="mark wordmark">able</div>
+    <p data-i18n="login_sub">Even inloggen om verder te gaan.</p>
+    <form id="loginForm">
+      <input id="usr" type="text" inputmode="text" autocapitalize="none" autocomplete="username" autocorrect="off" data-i18n-ph="user_ph" placeholder="Gebruikersnaam" aria-label="Gebruikersnaam">
+      <input id="pw" type="password" inputmode="text" autocomplete="current-password" data-i18n-ph="pw_ph" placeholder="Wachtwoord" aria-label="Wachtwoord">
+      <button type="submit" data-i18n="login_btn">Inloggen</button>
+      <div class="err" id="loginErr"></div>
+    </form>
+  </div>
+
+  <!-- Welkom / koppel Google (verschijnt na inloggen als Google nog niet gekoppeld is) -->
+  <div class="onboard hidden" id="onboard">
+    <div class="obinner">
+      <div class="mark wordmark">able</div>
+      <h2 class="obtitle" id="obTitle">Welkom</h2>
+      <p class="obtext" data-i18n="onb_text">Koppel je Google om Able je agenda, mail en contacten te laten beheren. Je logt in bij Google; Able ziet je wachtwoord nooit.</p>
+      <button class="obconnect" id="obConnect"><svg class="obg" viewBox="0 0 48 48"><path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/><path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24s.85 6.91 2.34 9.88l7.35-5.7z"/><path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/></svg><span data-i18n="connect_google">Koppel je Google</span></button>
+      <button class="oblater" id="obLater" data-i18n="onb_later">Later, breng me naar de app</button>
+      <button class="oblogout" id="obLogout" data-i18n="onb_logout">Niet jij? Uitloggen</button>
+    </div>
+  </div>
+
+  <main class="hidden" id="app">
+    <!-- Home -->
+    <section class="view active" id="view-able">
+      <div class="eyebrow" id="dateline">&nbsp;</div>
+      <h1 class="lt" id="hello">Goedemorgen Ko.</h1>
+      <div class="scroller">
+        <button class="hero" id="heroNext">
+          <div class="he" data-i18n="hero_next">Eerstvolgend</div>
+          <div class="row"><div class="time" id="heroTime">–</div>
+            <div class="tt"><div class="title" id="heroTitle">Laden…</div>
+            <div class="day" id="heroDay"></div></div></div>
+        </button>
+        <div class="glance">
+          <button class="gt" data-goto="planning"><span class="n" id="gAg">–</span><span class="l" data-i18n="g_appts">Afspraken</span></button>
+          <button class="gt" data-goto="planning" data-seg="tasks"><span class="n" id="gTk">–</span><span class="l" data-i18n="g_tasks">Taken</span></button>
+          <button class="gt" data-goto="mail"><span class="n" id="gMl">–</span><span class="l" data-i18n="g_wait">Wacht</span></button>
+        </div>
+        <div class="shead" data-i18n="ask_able">Vraag het Able</div>
+        <div class="sugg" id="sugg">
+          <button type="button" data-i18n="sugg1">Wat is de planning?</button>
+          <button type="button" data-i18n="sugg2">Plan een meeting</button>
+          <button type="button" data-i18n="sugg3">Lees mijn mail</button>
+          <button type="button" data-i18n="sugg4">Wat staat er op mijn lijst?</button>
+        </div>
+        <div class="shead" data-i18n="recent_chats">Recente chats</div>
+        <div class="recent" id="recentList"><div class="rempty" data-i18n="no_convos">Nog geen gesprekken.</div></div>
+      </div>
+    </section>
+
+    <!-- Chat -->
+    <section class="view" id="view-chat">
+      <div class="chead">
+        <button class="cback" id="chatBack" aria-label="Terug">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <div class="ct wordmark">able</div>
+      </div>
+      <div class="msgs" id="msgs"></div>
+      <form class="chatbar" id="chatForm">
+        <input id="msg" type="text" autocomplete="off" autocapitalize="sentences" data-i18n-ph="msg_ph" placeholder="Typ een bericht…" aria-label="Bericht">
+        <button type="submit" class="csend" id="send" aria-label="Versturen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+        <button type="button" class="cmic" id="chatMic" aria-label="Praat met Able">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+        </button>
+      </form>
+    </section>
+
+    <!-- Planning -->
+    <section class="view" id="view-planning">
+      <h1 class="lt" data-i18n="planning_title">Planning</h1>
+      <div class="seg" id="planSeg">
+        <button class="active" data-seg="agenda" data-i18n="seg_agenda">Agenda</button>
+        <button data-seg="tasks" data-i18n="seg_tasks">Taken</button>
+      </div>
+      <div class="scroller">
+        <div id="segAgenda">
+          <div id="agendaList"><div class="empty" data-i18n="loading">Laden…</div></div>
+        </div>
+        <div id="segTasks" class="hidden">
+          <form class="addrow" id="taskAdd">
+            <input id="taskInput" type="text" data-i18n-ph="task_ph" placeholder="Nieuwe taak…" aria-label="Nieuwe taak">
+            <button type="submit" aria-label="Toevoegen">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+          </form>
+          <div class="stack" id="taskList"><div class="empty" data-i18n="loading">Laden…</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Mail -->
+    <section class="view" id="view-mail">
+      <h1 class="lt" data-i18n="mail_title">Mail</h1>
+      <div class="mailsum" id="mailSum">&nbsp;</div>
+      <div class="scroller">
+        <div class="stack" id="mailList"><div class="empty" data-i18n="loading">Laden…</div></div>
+      </div>
+    </section>
+
+    <!-- Instellingen (master list) -->
+    <section class="view" id="view-settings">
+      <h1 class="lt" data-i18n="settings_title">Instellingen</h1>
+      <div class="scroller">
+        <div class="sgrouptitle" data-i18n="grp_able">Able</div>
+        <div class="sgroup">
+          <button class="srowi" data-sub="profile">
+            <span class="sicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 5-5 8-5s6.5 1 8 5"/></svg></span>
+            <span class="slabel" data-i18n="row_profile">Profiel</span><span class="sval" id="vProfile">Ko</span>
+            <span class="schev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+          </button>
+          <button class="srowi" data-sub="voice">
+            <span class="sicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span>
+            <span class="slabel" data-i18n="row_voice">Stem &amp; Taal</span><span class="sval" id="vVoice">–</span>
+            <span class="schev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+          </button>
+          <button class="srowi" data-sub="notif">
+            <span class="sicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6M10 21h4"/></svg></span>
+            <span class="slabel" data-i18n="row_notif">Meldingen</span>
+            <span class="schev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+          </button>
+        </div>
+
+        <div class="sgrouptitle" data-i18n="grp_app">App</div>
+        <div class="sgroup">
+          <button class="srowi" data-sub="theme">
+            <span class="sicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v18" fill="currentColor" stroke="none"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg></span>
+            <span class="slabel" data-i18n="row_display">Weergave</span><span class="sval" id="vTheme">–</span>
+            <span class="schev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+          </button>
+          <button class="srowi" data-sub="security">
+            <span class="sicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>
+            <span class="slabel" data-i18n="row_security">Privacy &amp; Beveiliging</span>
+            <span class="schev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+          </button>
+          <button class="srowi" data-sub="data">
+            <span class="sicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg></span>
+            <span class="slabel" data-i18n="row_data">Gegevens &amp; Geheugen</span>
+            <span class="schev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+          </button>
+        </div>
+
+        <div class="sgrouptitle" data-i18n="grp_conn">Koppelingen</div>
+        <div class="sgroup">
+          <button class="srowi" data-sub="connections">
+            <span class="sicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 15l6-6M8 12l-2 2a3 3 0 0 0 4 4l2-2M16 12l2-2a3 3 0 0 0-4-4l-2 2"/></svg></span>
+            <span class="slabel" data-i18n="row_conn">Diensten &amp; Mailboxen</span>
+            <span class="schev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+          </button>
+          <button class="srowi hidden" id="rowUsers" data-sub="users">
+            <span class="sicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M15.5 8a3 3 0 1 0-1.5 2.6"/><path d="M3 20c1-3.2 3.6-4.4 6-4.4s5 1.2 6 4.4"/><path d="M15.5 15.7c2 .3 3.7 1.5 4.5 4.3"/></svg></span>
+            <span class="slabel" data-i18n="row_users">Gebruikers</span>
+            <span class="schev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+          </button>
+        </div>
+
+        <div class="sgrouptitle" data-i18n="grp_info">Info</div>
+        <div class="sgroup">
+          <button class="srowi" data-sub="about">
+            <span class="sicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></span>
+            <span class="slabel" data-i18n="row_about">Over Able</span>
+            <span class="schev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+          </button>
+          <button class="srowi danger" id="logout">
+            <span class="sicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H3"/></svg></span>
+            <span class="slabel" data-i18n="row_logout">Uitloggen</span>
+          </button>
+        </div>
+        <div class="about" data-i18n-html="about_footer">Able — persoonlijke assistent<br>Draait veilig op je eigen server</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Instellingen-detailpagina -->
+  <div class="subpage" id="subpage">
+    <div class="subhead">
+      <button class="cback" id="subBack" aria-label="Terug">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="stitle" id="subTitle"></div>
+    </div>
+    <div class="subbody" id="subBody"></div>
+  </div>
+
+  <!-- Voice -->
+  <div class="voicescreen" id="voiceScreen">
+    <div class="vhead">
+      <button class="cback" id="vBack" aria-label="Terug">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="ct wordmark">able</div>
+    </div>
+    <div class="vbudget" id="vBudget">
+      <div class="brow"><span data-i18n="voice_budget_label">Spraaktegoed deze maand</span><span class="bamt" id="vBudgetAmt">–</span></div>
+      <div class="btrack"><div class="bfill" id="vBudgetFill"></div></div>
+    </div>
+    <div class="vmid">
+      <div id="orb" role="button" aria-label="Able"></div>
+      <div class="vstatus" id="vStatus">Zeg het maar, ik luister</div>
+      <div class="vsay" id="vSay"></div>
+    </div>
+    <button class="vtochat" id="vToChat" type="button">Ik kan nu niet praten</button>
+    <div class="vctrl">
+      <button class="vbtn" id="vKeys" aria-label="Typen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="3"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/></svg>
+      </button>
+      <button class="vbtn vmicbig" id="vMic" aria-label="Microfoon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+      </button>
+      <button class="vbtn" id="vEnd" aria-label="Be&euml;indigen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Tabbar -->
+  <nav class="tabbar hidden" id="tabbar">
+    <button class="tab active" data-view="able" aria-label="Home">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11 12 4l8 7"/><path d="M6 9.5V20h12V9.5"/></svg>
+      <span data-i18n="nav_home">Home</span>
+    </button>
+    <button class="tab" data-view="planning" aria-label="Planning">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="4"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>
+      <span data-i18n="nav_planning">Planning</span>
+    </button>
+    <button class="mictab" id="mic" aria-label="Spreek met Able">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M5.2 19.8C6.3 12.4 8.3 5.7 11.3 4.7c2.2-.72 3.3 1.9 3.8 4.9.6 3.4 1.6 6.1 4.8 6.4"/></svg>
+    </button>
+    <button class="tab" data-view="mail" aria-label="Mail">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m3 7 9 6 9-6"/></svg>
+      <span data-i18n="nav_mail">Mail</span>
+    </button>
+    <button class="tab" data-view="settings" aria-label="Meer">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3M5.5 5.5l2.1 2.1M16.4 16.4l2.1 2.1M18.5 5.5l-2.1 2.1M7.6 16.4l-2.1 2.1"/></svg>
+      <span data-i18n="nav_more">Meer</span>
+    </button>
+  </nav>
+
+<script>
+(function(){
+  // Desktop: toon de app in een iPhone 17-frame. Op smalle schermen (telefoon)
+  // gewoon full-screen. Binnen het frame draait de app in een iframe van zichzelf.
+  var deskQ = window.matchMedia('(min-width: 900px)');
+  if (window.self === window.top && deskQ.matches) {
+    document.documentElement.classList.add('deviceframe');
+    document.body.innerHTML =
+      '<div class="dfstage"><div class="dfphone" id="dfphone">'+
+      '<span class="dfbtn l b1"></span><span class="dfbtn l b2"></span><span class="dfbtn r b3"></span>'+
+      '<div class="dfisland"></div>'+
+      '<iframe class="dfscreen" src="'+location.href+'" title="Able" allow="microphone; clipboard-write"></iframe>'+
+      '</div></div>';
+    var ph=document.getElementById('dfphone');
+    function fit(){
+      var vw=window.innerWidth;
+      var vh=(window.visualViewport&&window.visualViewport.height)||window.innerHeight;
+      // Laat ~6% marge rondom zodat het toestel altijd netjes binnen het venster past.
+      var s=Math.min((vh*0.94)/900, (vw*0.94)/428, 1);
+      ph.style.transform='translate(-50%,-50%) scale('+Math.max(s,0.3).toFixed(4)+')';
+    }
+    fit();
+    window.addEventListener('resize', fit);
+    window.addEventListener('load', fit);
+    if(window.visualViewport) window.visualViewport.addEventListener('resize', fit);
+    deskQ.addEventListener('change', function(){ location.reload(); });
+    return;  // top-level stopt hier; de iframe-child draait de echte app
+  }
+  if (window.self !== window.top) document.documentElement.classList.add('inframe');
+
+  var login=document.getElementById('login'), app=document.getElementById('app'), tabbar=document.getElementById('tabbar');
+  var body=document.body;
+  var msgs=document.getElementById('msgs'), chatForm=document.getElementById('chatForm'),
+      msgIn=document.getElementById('msg'), send=document.getElementById('send');
+  var mic=document.getElementById('mic');
+  var voiceScreen=document.getElementById('voiceScreen'), vStatus=document.getElementById('vStatus'),
+      vSay=document.getElementById('vSay'), orb=document.getElementById('orb'),
+      vMic=document.getElementById('vMic');
+  var remoteAudio=document.getElementById('remoteAudio');
+
+  /* ---------- helpers ---------- */
+  function J(u,opts){ return fetch(u,opts).then(function(r){ if(r.status===401){ location.reload(); throw 0; } return r.json(); }); }
+  function el(html){ var d=document.createElement('div'); d.innerHTML=html.trim(); return d.firstChild; }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function now(){ return new Date().toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'}); }
+  /* ---------- taal (i18n) ---------- */
+  var STR = {
+    nl: {
+      days:['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag'],
+      months:['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'],
+      greet_night:'Goedenacht', greet_morning:'Goedemorgen', greet_afternoon:'Goedemiddag', greet_evening:'Goedenavond',
+      login_sub:'Even inloggen om verder te gaan.', pw_ph:'Wachtwoord', login_btn:'Inloggen',
+      login_wrong:'Onjuist wachtwoord.', login_err:'Er ging iets mis. Probeer opnieuw.',
+      hero_next:'Eerstvolgend', loading:'Laden…',
+      g_appts:'Afspraken', g_tasks:'Taken', g_wait:'Wacht',
+      ask_able:'Vraag het Able', recent_chats:'Recente chats', no_convos:'Nog geen gesprekken.',
+      sugg1:'Wat is de planning?', sugg2:'Plan een meeting', sugg3:'Lees mijn mail', sugg4:'Wat staat er op mijn lijst?',
+      msg_ph:'Typ een bericht…', planning_title:'Planning', seg_agenda:'Agenda', seg_tasks:'Taken', task_ph:'Nieuwe taak…',
+      mail_title:'Mail', settings_title:'Instellingen',
+      nav_home:'Home', nav_planning:'Planning', nav_mail:'Mail', nav_more:'Meer',
+      grp_able:'Able', grp_app:'App', grp_conn:'Koppelingen', grp_info:'Info',
+      row_profile:'Profiel', row_voice:'Stem & Taal', row_notif:'Meldingen', row_display:'Weergave',
+      row_security:'Privacy & Beveiliging', row_data:'Gegevens & Geheugen', row_conn:'Diensten & Mailboxen',
+      row_about:'Over Able', row_logout:'Uitloggen',
+      about_footer:'Able — persoonlijke assistent<br>Draait veilig op je eigen server',
+      hero_empty_time:'Niets gepland', hero_empty_title:'Je agenda is leeg de komende twee weken',
+      chat_help:'Waar kan ik je mee helpen?', chat_err:'Sorry, er ging iets mis. Probeer het nog eens.',
+      today:'Vandaag', agenda_empty:'Geen afspraken de komende twee weken.', tasks_empty:'Niks op je lijst. Lekker rustig.',
+      task_due:'voor ', mail_none:'Alles beantwoord. Je wacht nergens op.',
+      mail_one:'Eén persoon is je nog een antwoord schuldig.', mail_many:'{n} mensen zijn je nog een antwoord schuldig.',
+      mail_reminder:'Stuur een vriendelijke reminder naar {to} over "{s}"',
+      voice_listen:'Zeg het maar, ik luister', voice_listening:'Ik luister', voice_thinking:'Even denken',
+      voice_interrupt:'Tik op de bol om te onderbreken', voice_mic_off:'Microfoon uit', voice_moment:'Momentje',
+      voice_mic_denied:'Microfoon niet toegestaan.', voice_start_fail:'Kon de stem niet starten.',
+      voice_start_fail_code:'Kon de stem niet starten ({c}).', voice_no_key:'Geen sessiesleutel ontvangen.',
+      voice_conn_refused:'Verbinding geweigerd door de stemdienst.', voice_conn_fail:'Kon geen verbinding maken.',
+      vtochat:'Ik kan nu niet praten',
+      voice_budget_label:'Spraaktegoed deze maand', voice_budget_full:'Je spraaktegoed voor deze maand is op.',
+      voice_budget_left:'{amt} over', voice_budget_note:'Elke maand krijg je opnieuw €3 spraaktegoed. Typen blijft altijd gratis.',
+      profile_note:'Je gegevens en de mailboxen die Able beheert.', f_name:'Naam', h_mailboxes:'Mailboxen',
+      voice_note:'Kies de stem waarmee Able praat.', h_voice:'Stem', h_lang:'Taal',
+      voice_saved:'Opgeslagen — je hoort {name} bij je volgende gesprek.', lang_saved:'Taal opgeslagen. De app staat nu op {lang}.',
+      gender_v:'vrouw', gender_m:'man',
+      notif_note:'Bepaal welke automatische berichten Able je stuurt. Aan/uit werkt meteen.',
+      disp_theme:'Thema', theme_light:'Licht', theme_dark:'Donker', theme_system:'Systeem',
+      theme_meadow:'Meadow', theme_meadow_dark:'Meadow nacht',
+      disp_accent:'Accentkleur', disp_text:'Tekstgrootte', text_small:'Klein', text_normal:'Normaal', text_large:'Groot',
+      disp_note:'Zo ziet Able er voor jou uit. Elke wijziging is meteen zichtbaar in de hele app.',
+      sec_pw:'Wachtwoord wijzigen', pw_current:'Huidig wachtwoord', pw_new:'Nieuw wachtwoord', save:'Opslaan',
+      pw_updated:'Wachtwoord bijgewerkt.', pw_fail:'Er ging iets mis.', sec_access:'Toegang',
+      sec_note:'Able hoort alleen je stem via de microfoon tijdens een gesprek. Ze heeft geen toegang tot je camera, foto’s of locatie.',
+      data_note:'Able onthoudt jullie gesprekken om context te bewaren over sessies heen. Je kunt dit geheugen op elk moment wissen.',
+      data_remembered:'Onthouden berichten', data_clear:'Geheugen wissen', data_cleared:'Geheugen gewist ({n} berichten).',
+      conn_note:'Diensten en mailboxen waarmee Able is gekoppeld.', conn_google:'Google — Agenda, Gmail, Contacten',
+      conn_telegram:'Telegram', conn_openai:'OpenAI — stem', conn_active:'Actief', conn_off:'Uit', conn_no_mb:'Geen mailboxen',
+      svc_gcal:'Google Agenda', svc_contacts:'Contacten', svc_add:'Voeg service toe', mb_add:'Voeg mailbox toe',
+      svc_soon:'Binnenkort', svc_add_note:'Kies een dienst om te koppelen. Het instellen doen we samen op je server.',
+      mb_add_note:'Voeg een Gmail of zakelijke (IMAP) mailbox toe. Het instellen doen we samen.',
+      svc_drive:'Google Drive', svc_photos:'Google Foto’s', mb_gmail:'Gmail-account', mb_imap:'Zakelijke mail (IMAP)',
+      user_ph:'Gebruikersnaam',
+      connect_google:'Koppel Google', google_connected:'Google is gekoppeld',
+      google_note:'Koppel je eigen Gmail, Agenda en contacten. Je logt in bij Google; Able ziet je wachtwoord nooit.',
+      row_users:'Gebruikers', users_note:'Voeg mensen toe die Able mogen gebruiken. Ieder krijgt een eigen inlog en eigen data.',
+      u_name_ph:'Naam (bijv. Papa)', u_user_ph:'Gebruikersnaam (bijv. papa)', u_pw_ph:'Wachtwoord',
+      u_add:'Persoon toevoegen', u_added:'Toegevoegd. Geef ze de gebruikersnaam + wachtwoord.',
+      u_has_google:'Google gekoppeld', u_no_google:'Nog geen Google', u_you:'jij', u_admin:'beheerder',
+      u_delete:'Verwijderen', u_del_confirm:'{name} en al zijn/haar gegevens verwijderen? Dit kan niet ongedaan gemaakt worden.',
+      u_delete:'Verwijderen', u_del_confirm:'{name} en al hun gegevens definitief verwijderen?',
+      onb_welcome:'Welkom, {name}', onb_later:'Later, breng me naar de app', onb_logout:'Niet jij? Uitloggen',
+      onb_text:'Koppel je Google om Able je agenda, mail en contacten te laten beheren. Je logt in bij Google; Able ziet je wachtwoord nooit.',
+      about_tag:'Je persoonlijke assistent', about_version:'Versie', about_server:'Server', about_model:'Stem-model',
+      about_note:'Draait 24/7 op je eigen server.<br>Al je gesprekken en gegevens blijven privé.'
+    },
+    en: {
+      days:['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],
+      months:['January','February','March','April','May','June','July','August','September','October','November','December'],
+      greet_night:'Good night', greet_morning:'Good morning', greet_afternoon:'Good afternoon', greet_evening:'Good evening',
+      login_sub:'Please sign in to continue.', pw_ph:'Password', login_btn:'Sign in',
+      login_wrong:'Incorrect password.', login_err:'Something went wrong. Please try again.',
+      hero_next:'Up next', loading:'Loading…',
+      g_appts:'Appointments', g_tasks:'Tasks', g_wait:'Waiting',
+      ask_able:'Ask Able', recent_chats:'Recent chats', no_convos:'No conversations yet.',
+      sugg1:'What’s my schedule?', sugg2:'Schedule a meeting', sugg3:'Read my mail', sugg4:'What’s on my list?',
+      msg_ph:'Type a message…', planning_title:'Planning', seg_agenda:'Calendar', seg_tasks:'Tasks', task_ph:'New task…',
+      mail_title:'Mail', settings_title:'Settings',
+      nav_home:'Home', nav_planning:'Planning', nav_mail:'Mail', nav_more:'More',
+      grp_able:'Able', grp_app:'App', grp_conn:'Connections', grp_info:'Info',
+      row_profile:'Profile', row_voice:'Voice & Language', row_notif:'Notifications', row_display:'Display',
+      row_security:'Privacy & Security', row_data:'Data & Memory', row_conn:'Services & Mailboxes',
+      row_about:'About Able', row_logout:'Sign out',
+      about_footer:'Able — personal assistant<br>Runs securely on your own server',
+      hero_empty_time:'Nothing planned', hero_empty_title:'Your calendar is empty for the next two weeks',
+      chat_help:'How can I help you?', chat_err:'Sorry, something went wrong. Please try again.',
+      today:'Today', agenda_empty:'No appointments in the next two weeks.', tasks_empty:'Nothing on your list. All clear.',
+      task_due:'due ', mail_none:'All replied. You’re not waiting on anyone.',
+      mail_one:'One person still owes you a reply.', mail_many:'{n} people still owe you a reply.',
+      mail_reminder:'Send a friendly reminder to {to} about "{s}"',
+      voice_listen:'Go ahead, I’m listening', voice_listening:'Listening', voice_thinking:'Thinking',
+      voice_interrupt:'Tap the orb to interrupt', voice_mic_off:'Microphone off', voice_moment:'One moment',
+      voice_mic_denied:'Microphone not allowed.', voice_start_fail:'Couldn’t start the voice.',
+      voice_start_fail_code:'Couldn’t start the voice ({c}).', voice_no_key:'No session key received.',
+      voice_conn_refused:'Connection refused by the voice service.', voice_conn_fail:'Couldn’t connect.',
+      vtochat:'I can’t talk right now',
+      voice_budget_label:'Voice credit this month', voice_budget_full:'Your voice credit for this month is used up.',
+      voice_budget_left:'{amt} left', voice_budget_note:'You get €3 of voice credit again every month. Typing is always free.',
+      profile_note:'Your details and the mailboxes Able manages.', f_name:'Name', h_mailboxes:'Mailboxes',
+      voice_note:'Choose the voice Able speaks with.', h_voice:'Voice', h_lang:'Language',
+      voice_saved:'Saved — you’ll hear {name} in your next conversation.', lang_saved:'Language saved. The app is now in {lang}.',
+      gender_v:'female', gender_m:'male',
+      notif_note:'Choose which automatic messages Able sends you. On/off applies instantly.',
+      disp_theme:'Theme', theme_light:'Light', theme_dark:'Dark', theme_system:'System',
+      theme_meadow:'Meadow', theme_meadow_dark:'Meadow night',
+      disp_accent:'Accent color', disp_text:'Text size', text_small:'Small', text_normal:'Normal', text_large:'Large',
+      disp_note:'This is how Able looks for you. Every change is visible instantly across the app.',
+      sec_pw:'Change password', pw_current:'Current password', pw_new:'New password', save:'Save',
+      pw_updated:'Password updated.', pw_fail:'Something went wrong.', sec_access:'Access',
+      sec_note:'Able only hears your voice through the microphone during a conversation. It has no access to your camera, photos or location.',
+      data_note:'Able remembers your conversations to keep context across sessions. You can clear this memory at any time.',
+      data_remembered:'Remembered messages', data_clear:'Clear memory', data_cleared:'Memory cleared ({n} messages).',
+      conn_note:'Services and mailboxes Able is connected to.', conn_google:'Google — Calendar, Gmail, Contacts',
+      conn_telegram:'Telegram', conn_openai:'OpenAI — voice', conn_active:'Active', conn_off:'Off', conn_no_mb:'No mailboxes',
+      svc_gcal:'Google Calendar', svc_contacts:'Contacts', svc_add:'Add a service', mb_add:'Add a mailbox',
+      svc_soon:'Soon', svc_add_note:'Pick a service to connect. We set it up together on your server.',
+      mb_add_note:'Add a Gmail or business (IMAP) mailbox. We set it up together.',
+      svc_drive:'Google Drive', svc_photos:'Google Photos', mb_gmail:'Gmail account', mb_imap:'Business mail (IMAP)',
+      user_ph:'Username',
+      connect_google:'Connect Google', google_connected:'Google is connected',
+      google_note:'Connect your own Gmail, Calendar and contacts. You sign in with Google; Able never sees your password.',
+      row_users:'Users', users_note:'Add people who may use Able. Each gets their own login and their own data.',
+      u_name_ph:'Name (e.g. Dad)', u_user_ph:'Username (e.g. dad)', u_pw_ph:'Password',
+      u_add:'Add person', u_added:'Added. Give them the username + password.',
+      u_has_google:'Google connected', u_no_google:'No Google yet', u_you:'you', u_admin:'admin',
+      u_delete:'Delete', u_del_confirm:'Delete {name} and all their data? This cannot be undone.',
+      u_delete:'Delete', u_del_confirm:'Permanently delete {name} and all their data?',
+      onb_welcome:'Welcome, {name}', onb_later:'Later, take me to the app', onb_logout:'Not you? Log out',
+      onb_text:'Connect your Google so Able can manage your calendar, mail and contacts. You sign in with Google; Able never sees your password.',
+      about_tag:'Your personal assistant', about_version:'Version', about_server:'Server', about_model:'Voice model',
+      about_note:'Runs 24/7 on your own server.<br>All your conversations and data stay private.'
+    }
+  };
+  var LANG = localStorage.getItem('able_lang') || 'nl';
+  function t(k, vars){
+    var s = (STR[LANG] && STR[LANG][k]!=null) ? STR[LANG][k] : (STR.nl[k]!=null ? STR.nl[k] : k);
+    if(vars) for(var v in vars){ s = s.replace('{'+v+'}', vars[v]); }
+    return s;
+  }
+  function renderGreeting(){
+    var d=new Date(), h=d.getHours();
+    var g = h<6?'greet_night':h<12?'greet_morning':h<18?'greet_afternoon':'greet_evening';
+    var nm = (typeof USER!=='undefined' && USER && USER.name) ? USER.name : '';
+    document.getElementById('hello').textContent=t(g)+(nm?(' '+nm):'')+'.';
+    document.getElementById('dateline').textContent=t('days')[d.getDay()]+' '+d.getDate()+' '+t('months')[d.getMonth()];
+  }
+  function applyLang(){
+    document.documentElement.setAttribute('lang', LANG);
+    document.querySelectorAll('[data-i18n]').forEach(function(n){ n.textContent=t(n.getAttribute('data-i18n')); });
+    document.querySelectorAll('[data-i18n-html]').forEach(function(n){ n.innerHTML=t(n.getAttribute('data-i18n-html')); });
+    document.querySelectorAll('[data-i18n-ph]').forEach(function(n){ n.setAttribute('placeholder', t(n.getAttribute('data-i18n-ph'))); });
+    document.getElementById('vToChat').textContent=t('vtochat');
+    renderGreeting();
+    vStatus.textContent=t('voice_listen');
+    if(current==='mail') loadMail();
+    if(current==='planning'){ loadAgenda(); loadTasks(); }
+    if(current==='settings'){ loadSettings(); }
+    if(subpage.classList.contains('open') && currentSub) openSub(currentSub);
+    renderBudget();
+  }
+
+  /* ---------- navigatie ---------- */
+  var current='able';
+  function switchView(name){
+    if(name===current) return;
+    document.querySelectorAll('.view').forEach(function(v){ v.classList.remove('active'); });
+    document.getElementById('view-'+name).classList.add('active');
+    document.querySelectorAll('.tab').forEach(function(t){ t.classList.toggle('active', t.getAttribute('data-view')===name); });
+    body.setAttribute('data-view', name);
+    current=name;
+    if(name==='able') loadHome();
+    if(name==='planning'){ loadAgenda(); loadTasks(); }
+    if(name==='mail') loadMail();
+    if(name==='settings') loadSettings();
+  }
+  document.querySelectorAll('.tab').forEach(function(t){
+    t.addEventListener('click', function(){ switchView(t.getAttribute('data-view')); });
+  });
+  document.querySelectorAll('.gt').forEach(function(g){
+    g.addEventListener('click', function(){
+      switchView(g.getAttribute('data-goto'));
+      if(g.getAttribute('data-seg')==='tasks') setSeg('tasks');
+    });
+  });
+  document.getElementById('heroNext').addEventListener('click', function(){ switchView('planning'); setSeg('agenda'); });
+
+  /* ---------- Home ---------- */
+  function loadHome(){
+    J('/api/agenda').then(function(d){
+      var items=d.items||[];
+      document.getElementById('gAg').textContent=items.length;
+      var hero=document.getElementById('heroNext');
+      if(items.length){
+        hero.classList.remove('empty');
+        document.getElementById('heroTime').textContent=items[0].time;
+        document.getElementById('heroTitle').textContent=items[0].title;
+        document.getElementById('heroDay').textContent=items[0].day;
+      } else {
+        hero.classList.add('empty');
+        document.getElementById('heroTime').textContent=t('hero_empty_time');
+        document.getElementById('heroTitle').textContent=t('hero_empty_title');
+        document.getElementById('heroDay').textContent='';
+      }
+    }).catch(function(){});
+    J('/api/todos').then(function(d){ document.getElementById('gTk').textContent=(d.items||[]).length; }).catch(function(){});
+    J('/api/mailtab').then(function(d){ document.getElementById('gMl').textContent=(d.followups||[]).length; }).catch(function(){});
+    loadRecents();
+  }
+  function loadRecents(){
+    var box=document.getElementById('recentList');
+    J('/api/history').then(function(d){
+      var items=d.items||[], pairs=[];
+      for(var i=0;i<items.length;i++){
+        if(items[i].role==='user'){
+          var reply=(items[i+1]&&items[i+1].role==='assistant')?items[i+1].content:'';
+          pairs.push({q:items[i].content, a:reply});
+        }
+      }
+      pairs=pairs.slice(-3).reverse();
+      box.innerHTML='';
+      if(!pairs.length){ box.appendChild(el('<div class="rempty">'+esc(t('no_convos'))+'</div>')); return; }
+      pairs.forEach(function(p){
+        var r=el('<div class="ritem"><div class="tx"><div class="t">'+esc(p.q)+'</div><div class="p">'+esc(p.a||'…')+'</div></div><div class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></div></div>');
+        r.addEventListener('click', function(){ openChat(); });
+        box.appendChild(r);
+      });
+    }).catch(function(){});
+  }
+
+  /* ---------- Chat ---------- */
+  function addBubble(role, text, ts){
+    var b=el('<div class="b '+(role==='user'?'user':'ai')+'"></div>');
+    b.textContent=text;
+    msgs.appendChild(b);
+    msgs.appendChild(el('<div class="bt '+(role==='user'?'user':'ai')+'">'+(ts||now())+'</div>'));
+    msgs.scrollTop=msgs.scrollHeight;
+    return b;
+  }
+  function chatEmptyState(){
+    var w=el('<div class="cempty"><div class="q">'+esc(t('chat_help'))+'</div><div class="sugg"></div></div>');
+    var sg=w.querySelector('.sugg');
+    [t('sugg1'),t('sugg3'),t('sugg4')].forEach(function(q){
+      var b=el('<button type="button">'+esc(q)+'</button>');
+      b.addEventListener('click', function(){ sendChat(q); });
+      sg.appendChild(b);
+    });
+    return w;
+  }
+  var histReady=Promise.resolve();
+  // Elke keer dat je opnieuw met Able praat begin je met een schone chat.
+  // De gesprekken zelf blijven op de server bewaard (voor context & geheugen);
+  // we tonen hier alleen het huidige, verse gesprek.
+  function newChat(){
+    msgs.innerHTML='';
+    msgs.appendChild(chatEmptyState());
+  }
+  function openChat(){
+    switchView('chat');
+    if(!msgs.querySelector('.b') && !msgs.querySelector('.cempty')) newChat();
+    setTimeout(function(){ msgs.scrollTop=msgs.scrollHeight; }, 350);
+  }
+  document.getElementById('chatBack').addEventListener('click', function(){ switchView('able'); });
+
+  function sendChat(text){
+    if(!text) return;
+    histReady.then(function(){ doSend(text); });
+  }
+  function doSend(text){
+    var ce=msgs.querySelector('.cempty'); if(ce) ce.remove();
+    send.disabled=true; msgIn.value='';
+    addBubble('user', text);
+    var tip=el('<div class="typing"><i></i><i></i><i></i></div>');
+    msgs.appendChild(tip); msgs.scrollTop=msgs.scrollHeight;
+    function finishNonStream(r){
+      return r.json().then(function(d){ if(tip.parentNode) tip.remove(); addBubble('ai', (d&&d.reply)||'…'); });
+    }
+    fetch('/api/chat/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text})})
+      .then(function(r){
+        if(r.status===401){ location.reload(); return; }
+        if(!r.ok || !r.body || !r.body.getReader){
+          // Streaming niet beschikbaar → val terug op het gewone antwoord.
+          if(tip.parentNode) tip.remove();
+          return fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text})}).then(finishNonStream);
+        }
+        var bubble=null, acc='';
+        var reader=r.body.getReader(), dec=new TextDecoder();
+        function pump(){
+          return reader.read().then(function(res){
+            if(res.done){
+              if(!bubble){ addBubble('ai','…'); }
+              return;
+            }
+            var piece=dec.decode(res.value,{stream:true});
+            if(piece){
+              if(!bubble){ if(tip.parentNode) tip.remove(); bubble=addBubble('ai',''); }
+              acc+=piece; bubble.textContent=acc; msgs.scrollTop=msgs.scrollHeight;
+            }
+            return pump();
+          });
+        }
+        return pump();
+      })
+      .catch(function(){ if(tip.parentNode) tip.remove(); addBubble('ai',t('chat_err')); })
+      .finally(function(){ send.disabled=false; });
+  }
+  chatForm.addEventListener('submit', function(e){ e.preventDefault(); sendChat(msgIn.value.trim()); });
+
+  document.querySelectorAll('#sugg button').forEach(function(b){
+    b.addEventListener('click', function(){ openChat(); sendChat(b.textContent); });
+  });
+
+  /* ---------- Planning ---------- */
+  function setSeg(name){
+    document.querySelectorAll('#planSeg button').forEach(function(s){
+      s.classList.toggle('active', s.getAttribute('data-seg')===name);
+    });
+    document.getElementById('segAgenda').classList.toggle('hidden', name!=='agenda');
+    document.getElementById('segTasks').classList.toggle('hidden', name!=='tasks');
+  }
+  document.querySelectorAll('#planSeg button').forEach(function(s){
+    s.addEventListener('click', function(){ setSeg(s.getAttribute('data-seg')); });
+  });
+
+  function loadAgenda(){
+    var box=document.getElementById('agendaList');
+    J('/api/agenda').then(function(d){
+      box.innerHTML='';
+      var items=d.items||[];
+      if(!items.length){ box.appendChild(el('<div class="empty">'+esc(t('agenda_empty'))+'</div>')); return; }
+      var lastDay=null, stack=null;
+      items.forEach(function(it){
+        if(it.day!==lastDay){
+          lastDay=it.day;
+          box.appendChild(el('<div class="dayhead">'+esc(it.day)+'</div>'));
+          stack=el('<div class="stack"></div>');
+          box.appendChild(stack);
+        }
+        stack.appendChild(el('<div class="card"><div class="time">'+esc(it.time)+'</div><div class="title">'+esc(it.title)+'</div></div>'));
+      });
+    }).catch(function(){});
+  }
+  function loadTasks(){
+    var box=document.getElementById('taskList');
+    J('/api/todos').then(function(d){
+      box.innerHTML='';
+      if(!d.items || !d.items.length){ box.appendChild(el('<div class="empty">'+esc(t('tasks_empty'))+'</div>')); return; }
+      d.items.forEach(function(it){
+        var c=el('<div class="card"><button class="check" aria-label="Afvinken"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg></button><div style="flex:1;min-width:0"><div class="title">'+esc(it.text)+'</div>'+(it.due?('<div class="sub">'+esc(t('task_due'))+esc(it.due)+'</div>'):'')+'</div></div>');
+        c.querySelector('.check').addEventListener('click', function(){
+          c.classList.add('done');
+          fetch('/api/todos/done',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:it.id})});
+          setTimeout(function(){ c.remove(); if(!box.children.length) loadTasks(); }, 400);
+        });
+        box.appendChild(c);
+      });
+    }).catch(function(){});
+  }
+  document.getElementById('taskAdd').addEventListener('submit', function(e){
+    e.preventDefault();
+    var inp=document.getElementById('taskInput'), text=inp.value.trim();
+    if(!text) return;
+    inp.value='';
+    fetch('/api/todos/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text})})
+      .then(function(){ loadTasks(); });
+  });
+
+  /* ---------- Mail ---------- */
+  function loadMail(){
+    var box=document.getElementById('mailList'), sum=document.getElementById('mailSum');
+    J('/api/mailtab').then(function(d){
+      box.innerHTML='';
+      var f=d.followups||[];
+      sum.textContent = !f.length ? t('mail_none')
+        : (f.length===1 ? t('mail_one') : t('mail_many',{n:f.length}));
+      if(!f.length) return;
+      f.forEach(function(m){
+        var initial=(m.to||'?').charAt(0);
+        var c=el('<div class="card mailrow"><div class="avatar">'+esc(initial)+'</div><div style="flex:1;min-width:0"><div class="title">'+esc(m.to)+'</div><div class="sub">'+esc(m.subject)+'</div></div><div class="badge">'+m.days+'d</div></div>');
+        c.addEventListener('click', function(){
+          openChat();
+          histReady.then(function(){
+            msgIn.value=t('mail_reminder',{to:m.to, s:m.subject});
+            msgIn.focus();
+          });
+        });
+        box.appendChild(c);
+      });
+    }).catch(function(){});
+  }
+
+  /* ---------- Thema / accent / tekstgrootte ---------- */
+  var PREF = {
+    theme: localStorage.getItem('able_theme') || 'meadow',
+    accent: localStorage.getItem('able_accent') || '#3D86FF',
+    text: localStorage.getItem('able_text') || '1'
+  };
+  var ACCENTS=[['Blauw','#3D86FF'],['Paars','#7A5CFF'],['Groen','#2FBF71'],['Grafiet','#3A3A40']];
+  // Volledige paletten (achtergrond + tekst + accent samen). Zie CSS [data-theme].
+  var PALETTES={ 'meadow':'#F7F9E1', 'meadow-dark':'#1B3E4B' };
+  function isPalette(){ return PALETTES.hasOwnProperty(PREF.theme); }
+  function isDark(){ return PREF.theme==='dark' || (PREF.theme==='system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); }
+  function applyTheme(){
+    var attr, meta;
+    if(isPalette()){ attr=PREF.theme; meta=PALETTES[PREF.theme]; }
+    else { var d=isDark(); attr=d?'dark':'light'; meta=d?'#0C0C0F':'#FFFFFF'; }
+    document.documentElement.setAttribute('data-theme', attr);
+    var mt=document.querySelector('meta[name="theme-color"]'); if(mt) mt.setAttribute('content', meta);
+    applyAccent();
+  }
+  function applyAccent(){
+    // Paletten bepalen hun eigen accent (via CSS); anders de gekozen accentkleur.
+    if(isPalette()) document.documentElement.style.removeProperty('--blue');
+    else document.documentElement.style.setProperty('--blue', PREF.accent);
+  }
+  function applyText(){ document.documentElement.style.setProperty('--tscale', PREF.text); }
+  applyTheme(); applyText();
+  if(window.matchMedia){ try{ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(){ if(PREF.theme==='system') applyTheme(); }); }catch(e){} }
+  function themeLabel(){ var m={light:'theme_light',dark:'theme_dark',system:'theme_system',meadow:'theme_meadow','meadow-dark':'theme_meadow_dark'}; return t(m[PREF.theme]||'theme_system'); }
+
+  /* ---------- Instellingen ---------- */
+  var settingsData=null;
+  var VOICE_META_FALLBACK=[
+    {id:'marin',name:'Saar',gender:'v'},{id:'coral',name:'Emma',gender:'v'},
+    {id:'sage',name:'Fleur',gender:'v'},{id:'shimmer',name:'Lisa',gender:'v'},
+    {id:'cedar',name:'Daan',gender:'m'},{id:'alloy',name:'Bram',gender:'m'}];
+  function voiceMeta(){ return (settingsData&&settingsData.voices_meta)||VOICE_META_FALLBACK; }
+  function voiceName(id){ var m=voiceMeta().filter(function(v){return v.id===id;})[0]; return m?m.name:(id||''); }
+  function loadSettings(){
+    document.getElementById('vTheme').textContent=themeLabel();
+    J('/api/settings').then(function(d){
+      settingsData=d;
+      document.getElementById('vVoice').textContent=voiceName(d.voice);
+    }).catch(function(){});
+  }
+  document.getElementById('logout').addEventListener('click', function(){
+    fetch('/api/logout',{method:'POST'}).then(function(){ location.reload(); });
+  });
+
+  var FEAT_LABELS = {
+    en:{ dagelijkse_brief:'Daily morning summary of your calendar',
+      herinnering_1u:'Reminder ~1 hour before an appointment',
+      verjaardagen:'Birthdays a week in advance',
+      taken:'Reminders for tasks with a deadline',
+      followup_radar:'Automatically track whether your emails get a reply' } };
+  function featLabel(f){ return (LANG!=='nl' && FEAT_LABELS[LANG] && FEAT_LABELS[LANG][f.key]) || f.label; }
+  function postSetting(o){ fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)}); }
+  function saveVoice(v){ postSetting({voice:v}); }
+  function saveFeat(k,on){ postSetting({key:k,on:on}); }
+  function saveLang(l){ postSetting({lang:l}); }
+  function connectGoogle(){
+    fetch('/oauth/start').then(function(r){ return r.ok? r.json() : null; })
+      .then(function(d){
+        // Google weigert in een iframe te laden (clickjacking-bescherming → 403).
+        // Op desktop draait de app in de iPhone-mockup-iframe, dus stuur altijd
+        // het hoofdvenster naar Google, niet de iframe.
+        if(d && d.url){ try{ (window.top||window).location.href=d.url; }catch(e){ window.location.href=d.url; } }
+      }).catch(function(){});
+  }
+  function subnote(txt){ return el('<div class="subnote">'+esc(txt)+'</div>'); }
+  function sgt(txt){ return el('<div class="sgrouptitle">'+esc(txt)+'</div>'); }
+
+  // Echte merk-iconen (SVG) voor de services-sectie.
+  var ICON = {
+    gmail:'<svg viewBox="0 0 48 48"><path fill="#4caf50" d="M45 16.2l-5 2.75-5 4.75L35 40h7c1.657 0 3-1.343 3-3z"/><path fill="#1e88e5" d="M3 16.2l3.614 1.71L13 23.7V40H6c-1.657 0-3-1.343-3-3z"/><polygon fill="#e53935" points="35,11.2 24,19.45 13,11.2 12,17 13,23.7 24,31.95 35,23.7 36,17"/><path fill="#c62828" d="M3 12.298V16.2l10 7.5V11.2L9.876 8.859C9.132 8.301 8.228 8 7.298 8 4.924 8 3 9.924 3 12.298z"/><path fill="#fbc02d" d="M45 12.298V16.2l-10 7.5V11.2l3.124-2.341C38.868 8.301 39.772 8 40.702 8 43.076 8 45 9.924 45 12.298z"/></svg>',
+    gcal:'<svg viewBox="0 0 48 48"><rect width="22" height="22" x="13" y="13" fill="#fff"/><polygon fill="#1e88e5" points="25.68,20.92 26.688,22.36 28.272,21.208 28.272,29.56 30,29.56 30,18.616 28.56,18.616"/><path fill="#1e88e5" d="M22.943 23.745c.625-.574 1.013-1.37 1.013-2.249 0-1.747-1.533-3.168-3.417-3.168-1.602 0-2.972 1.008-3.33 2.45l1.657.421c.165-.664.868-1.146 1.673-1.146.942 0 1.709.646 1.709 1.44s-.767 1.44-1.709 1.44h-.997v1.728h.997c1.081 0 1.993.751 1.993 1.64 0 .904-.866 1.64-1.931 1.64-.962 0-1.784-.61-1.914-1.418L17 28.403c.264 1.641 1.807 2.878 3.588 2.878 2.012 0 3.648-1.523 3.648-3.396 0-1.479-.5-2.522-1.294-3.14z"/><polygon fill="#fbc02d" points="34,42 14,42 13,38 14,34 34,34 35,38"/><polygon fill="#4caf50" points="38,35 42,34 42,14 38,13 34,14 34,34"/><path fill="#1e88e5" d="M34 14l1-4-1-4H9C7.343 6 6 7.343 6 9v25l4 1 4-1V14z"/><polygon fill="#e53935" points="34,34 34,42 42,34"/><path fill="#1565c0" d="M39 6h-5v8h8V9c0-1.657-1.343-3-3-3z"/><path fill="#2e7d32" d="M9 42h5v-8H6v5c0 1.657 1.343 3 3 3z"/></svg>',
+    openai:'<svg viewBox="0 0 24 24"><path fill="#000" d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 22.02a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023-.141-.085-4.774-2.782a.776.776 0 0 0-.78 0L9.409 7.23V4.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365 2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z"/></svg>',
+    telegram:'<svg viewBox="0 0 24 24"><path fill="#229ED9" d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>',
+    drive:'<svg viewBox="0 0 48 48"><path fill="#1e88e5" d="M6 40l7-12h28l-7 12z"/><path fill="#4caf50" d="M31 8h-14l14 24 7-12z" opacity="0"/><polygon fill="#fbc02d" points="17,8 31,8 45,32 31,32"/><polygon fill="#4caf50" points="17,8 3,32 10,44 24,20"/><polygon fill="#1e88e5" points="45,32 31,32 24,44 38,44"/><polygon fill="#e53935" points="31,32 17,32 10,44 38,44" opacity="0"/></svg>',
+    mail:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m3 7 9 6 9-6"/></svg>'
+  };
+
+  var SUBS = {
+    profile: { title:'row_profile', build:function(b){
+      b.appendChild(subnote(t('profile_note')));
+      b.appendChild(el('<div class="fieldcard"><div class="field"><span class="fl">'+esc(t('f_name'))+'</span><span class="fv">Ko</span></div></div>'));
+      b.appendChild(sgt(t('h_mailboxes')));
+      var mb=el('<div class="fieldcard"><div class="field"><span class="fl">'+esc(t('loading'))+'</span></div></div>');
+      b.appendChild(mb);
+      J('/api/integrations').then(function(d){ mb.innerHTML='';
+        (d.mailboxes||[]).forEach(function(m){ mb.appendChild(el('<div class="field"><span class="fl">'+esc(m.name)+'</span><span class="fv">'+esc(m.user)+'</span></div>')); });
+      });
+    }},
+    voice: { title:'row_voice', build:function(b){
+      b.appendChild(subnote(t('voice_note')));
+      b.appendChild(sgt(t('h_voice')));
+      var chips=el('<div class="chips voicechips"></div>');
+      var cur=(settingsData&&settingsData.voice)||'marin';
+      var saved=el('<div class="msgline"></div>');
+      voiceMeta().forEach(function(v){
+        var gl=t(v.gender==='m'?'gender_m':'gender_v');
+        var c=el('<button class="chip'+(v.id===cur?' on':'')+'"><span class="vn">'+esc(v.name)+'</span><span class="vg">'+esc(gl)+'</span></button>');
+        c.addEventListener('click', function(){
+          chips.querySelectorAll('.chip').forEach(function(x){x.classList.remove('on');}); c.classList.add('on');
+          saveVoice(v.id); if(settingsData) settingsData.voice=v.id;
+          document.getElementById('vVoice').textContent=v.name;
+          saved.className='msgline ok'; saved.textContent=t('voice_saved',{name:v.name});
+        });
+        chips.appendChild(c);
+      });
+      b.appendChild(chips); b.appendChild(saved);
+      b.appendChild(sgt(t('h_lang')));
+      var seg=el('<div class="seg"></div>');
+      [['nl','Nederlands'],['en','English']].forEach(function(o){
+        var btn=el('<button'+(LANG===o[0]?' class="active"':'')+'>'+o[1]+'</button>');
+        btn.addEventListener('click', function(){
+          if(LANG===o[0]) return;
+          LANG=o[0]; localStorage.setItem('able_lang',o[0]); saveLang(o[0]); applyLang();
+        });
+        seg.appendChild(btn);
+      });
+      b.appendChild(seg);
+      b.appendChild(el('<div style="height:12px"></div>'));
+      var bud=el('<div class="vbudget"><div class="brow"><span>'+esc(t('voice_budget_label'))+'</span><span class="bamt">–</span></div><div class="btrack"><div class="bfill"></div></div></div>');
+      b.appendChild(bud);
+      b.appendChild(subnote(t('voice_budget_note')));
+      if(voiceUsage) renderBudget();
+      loadVoiceUsage();
+    }},
+    notif: { title:'row_notif', build:function(b){
+      b.appendChild(subnote(t('notif_note')));
+      var box=el('<div class="stack"></div>'); b.appendChild(box);
+      function render(feats){ box.innerHTML='';
+        feats.forEach(function(f){
+          var row=el('<div class="card srow"><div class="lab">'+esc(featLabel(f))+'</div><button class="toggle'+(f.on?' on':'')+'"></button></div>');
+          row.querySelector('.toggle').addEventListener('click', function(){
+            var tg=row.querySelector('.toggle'); tg.classList.toggle('on'); saveFeat(f.key, tg.classList.contains('on'));
+          });
+          box.appendChild(row);
+        });
+      }
+      if(settingsData&&settingsData.features) render(settingsData.features);
+      else J('/api/settings').then(function(d){ settingsData=d; render(d.features||[]); });
+    }},
+    theme: { title:'row_display', build:function(b){
+      b.appendChild(subnote(t('disp_note')));
+      b.appendChild(sgt(t('disp_theme')));
+      var grid=el('<div class="themegrid"></div>');
+      var THEMES=[
+        {id:'light',bg:'#FFFFFF',fg:'#101012',ac:'#3D86FF'},
+        {id:'dark',bg:'#0C0C0F',fg:'#F3F3F5',ac:'#3D86FF'},
+        {id:'system',system:true},
+        {id:'meadow',bg:'#F7F9E1',fg:'#204654',ac:'#35708A'},
+        {id:'meadow-dark',bg:'#204654',fg:'#F7F9E1',ac:'#CAFFA6'}
+      ];
+      var LBL={light:'theme_light',dark:'theme_dark',system:'theme_system',meadow:'theme_meadow','meadow-dark':'theme_meadow_dark'};
+      THEMES.forEach(function(th){
+        var prev = th.system ? 'background:linear-gradient(90deg,#FFFFFF 0 50%,#101013 50% 100%)' : 'background:'+th.bg;
+        var bar = th.system ? '#101012' : th.fg;
+        var dot = th.system ? '#3D86FF' : th.ac;
+        var card=el('<button class="themecard'+(PREF.theme===th.id?' on':'')+'"><span class="themeprev" style="'+prev+'"><span class="bar" style="background:'+bar+'"></span><span class="dot" style="background:'+dot+'"></span></span><span class="themelabel">'+esc(t(LBL[th.id]))+'</span></button>');
+        card.addEventListener('click', function(){
+          PREF.theme=th.id; localStorage.setItem('able_theme',th.id); applyTheme();
+          document.getElementById('vTheme').textContent=themeLabel();
+          openSub('theme');
+        });
+        grid.appendChild(card);
+      });
+      b.appendChild(grid);
+      if(!isPalette()){
+        b.appendChild(sgt(t('disp_accent')));
+        var sw=el('<div class="swatches"></div>');
+        ACCENTS.forEach(function(a){
+          var s=el('<button class="swatch'+(PREF.accent===a[1]?' on':'')+'" title="'+a[0]+'" style="background:'+a[1]+'"></button>');
+          s.addEventListener('click', function(){
+            sw.querySelectorAll('.swatch').forEach(function(x){x.classList.remove('on');}); s.classList.add('on');
+            PREF.accent=a[1]; localStorage.setItem('able_accent',a[1]); applyAccent();
+          });
+          sw.appendChild(s);
+        });
+        b.appendChild(sw);
+      }
+      b.appendChild(sgt(t('disp_text')));
+      var seg2=el('<div class="seg"></div>');
+      [['0.9','text_small'],['1','text_normal'],['1.35','text_large']].forEach(function(o){
+        var btn=el('<button'+(PREF.text===o[0]?' class="active"':'')+'>'+esc(t(o[1]))+'</button>');
+        btn.addEventListener('click', function(){
+          seg2.querySelectorAll('button').forEach(function(x){x.classList.remove('active');}); btn.classList.add('active');
+          PREF.text=o[0]; localStorage.setItem('able_text',o[0]); applyText();
+        });
+        seg2.appendChild(btn);
+      });
+      b.appendChild(seg2);
+    }},
+    security: { title:'row_security', build:function(b){
+      b.appendChild(sgt(t('sec_pw')));
+      var f=el('<form class="pwform"><input type="password" placeholder="'+esc(t('pw_current'))+'" autocomplete="current-password"><input type="password" placeholder="'+esc(t('pw_new'))+'" autocomplete="new-password"><button type="submit" class="btn-primary">'+esc(t('save'))+'</button><div class="msgline"></div></form>');
+      var ins=f.querySelectorAll('input'), msg=f.querySelector('.msgline');
+      f.addEventListener('submit', function(e){ e.preventDefault(); msg.className='msgline'; msg.textContent='';
+        fetch('/api/password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({current:ins[0].value,new:ins[1].value})})
+          .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,d:d}; }); })
+          .then(function(res){ if(res.ok){ msg.className='msgline ok'; msg.textContent=t('pw_updated'); ins[0].value=''; ins[1].value=''; }
+            else { msg.className='msgline err'; msg.textContent=(res.d&&res.d.detail)||t('pw_fail'); } })
+          .catch(function(){ msg.className='msgline err'; msg.textContent=t('pw_fail'); });
+      });
+      b.appendChild(f);
+      b.appendChild(sgt(t('sec_access')));
+      b.appendChild(subnote(t('sec_note')));
+    }},
+    data: { title:'row_data', build:function(b){
+      b.appendChild(subnote(t('data_note')));
+      b.appendChild(el('<div class="fieldcard"><div class="field"><span class="fl">'+esc(t('data_remembered'))+'</span><span class="fv" id="memCnt">…</span></div></div>'));
+      J('/api/integrations').then(function(d){ var e=document.getElementById('memCnt'); if(e) e.textContent=(d.memory_count!=null?d.memory_count:'–'); });
+      var btn=el('<button class="btn-danger">'+esc(t('data_clear'))+'</button>'), msg=el('<div class="msgline"></div>');
+      btn.addEventListener('click', function(){
+        fetch('/api/memory/clear',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
+          msg.className='msgline ok'; msg.textContent=t('data_cleared',{n:(d.removed||0)});
+          var e=document.getElementById('memCnt'); if(e) e.textContent='0';
+        }).catch(function(){ msg.className='msgline err'; msg.textContent=t('pw_fail'); });
+      });
+      b.appendChild(btn); b.appendChild(msg);
+    }},
+    connections: { title:'row_conn', build:function(b){
+      b.appendChild(subnote(t('conn_note')));
+      function svc(icon, name, on, sub){
+        var pill = on ? '<span class="svcpill on"><span class="pdot"></span>'+esc(t('conn_active'))+'</span>'
+                      : '<span class="svcpill off">'+esc(t('conn_off'))+'</span>';
+        return el('<div class="svc"><span class="svcicon">'+icon+'</span><div class="svctx"><div class="svcname">'+esc(name)+'</div>'+(sub?'<div class="svcsub">'+esc(sub)+'</div>':'')+'</div>'+pill+'</div>');
+      }
+      function optRow(icon, name){
+        return '<div class="svcopt"><span class="svcicon">'+icon+'</span><span class="svcname">'+esc(name)+'</span><span class="svcsoon">'+esc(t('svc_soon'))+'</span></div>';
+      }
+      var box=el('<div class="svcgroup"></div>'); b.appendChild(box);
+      box.appendChild(subnote(t('loading')));
+      J('/api/integrations').then(function(d){
+        box.innerHTML='';
+        if(!d.google){
+          box.appendChild(subnote(t('google_note')));
+          var gbtn=el('<button class="btn-primary" style="width:100%">'+esc(t('connect_google'))+'</button>');
+          gbtn.addEventListener('click', connectGoogle);
+          box.appendChild(gbtn);
+          box.appendChild(el('<div style="height:8px"></div>'));
+        }
+        box.appendChild(svc(ICON.gmail, 'Gmail', d.google));
+        box.appendChild(svc(ICON.gcal, t('svc_gcal'), d.google));
+        box.appendChild(svc(ICON.openai, 'OpenAI', d.openai, d.openai?d.voice_model:''));
+        box.appendChild(svc(ICON.telegram, 'Telegram', d.telegram));
+        // Voeg service toe
+        var addS=el('<button class="svcadd"><span class="plus">+</span>'+esc(t('svc_add'))+'</button>');
+        var panS=el('<div class="svcpanel hidden"><div class="svcopt" style="border:none"><div class="svctx"><div class="svcsub" style="white-space:normal">'+esc(t('svc_add_note'))+'</div></div></div>'+optRow(ICON.drive, t('svc_drive'))+'</div>');
+        addS.addEventListener('click', function(){ panS.classList.toggle('hidden'); });
+        box.appendChild(addS); box.appendChild(panS);
+
+        b.appendChild(sgt(t('h_mailboxes')));
+        var mbg=el('<div class="svcgroup"></div>'); b.appendChild(mbg);
+        (d.mailboxes||[]).forEach(function(m){
+          mbg.appendChild(svc(m.type==='gmail'?ICON.gmail:ICON.mail, m.name, m.on!==false, m.user));
+        });
+        if(!(d.mailboxes||[]).length) mbg.appendChild(subnote(t('conn_no_mb')));
+        var addM=el('<button class="svcadd"><span class="plus">+</span>'+esc(t('mb_add'))+'</button>');
+        var panM=el('<div class="svcpanel hidden"><div class="svcopt" style="border:none"><div class="svctx"><div class="svcsub" style="white-space:normal">'+esc(t('mb_add_note'))+'</div></div></div>'+optRow(ICON.gmail, t('mb_gmail'))+optRow(ICON.mail, t('mb_imap'))+'</div>');
+        addM.addEventListener('click', function(){ panM.classList.toggle('hidden'); });
+        mbg.appendChild(addM); mbg.appendChild(panM);
+      }).catch(function(){});
+    }},
+    users: { title:'row_users', build:function(b){
+      b.appendChild(subnote(t('users_note')));
+      var list=el('<div class="svcgroup"></div>'); b.appendChild(list);
+      function render(users){
+        list.innerHTML='';
+        (users||[]).forEach(function(u){
+          var tag = u.is_admin ? t('u_admin') : (u.has_google ? t('u_has_google') : t('u_no_google'));
+          var cls = u.has_google || u.is_admin ? 'on' : 'off';
+          var pill = '<span class="svcpill '+cls+'">'+(cls==='on'?'<span class="pdot"></span>':'')+esc(tag)+'</span>';
+          var row=el('<div class="svc"><span class="svcicon" style="background:var(--ink);color:var(--white);box-shadow:none"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 5-5 8-5s6.5 1 8 5"/></svg></span><div class="svctx"><div class="svcname">'+esc(u.name)+'</div><div class="svcsub">@'+esc(u.username)+'</div></div>'+pill+'</div>');
+          if(!u.is_admin){
+            var del=el('<button class="udel" aria-label="'+esc(t('u_delete'))+'" title="'+esc(t('u_delete'))+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M10 11v6M14 11v6"/></svg></button>');
+            del.addEventListener('click', function(){
+              if(!confirm(t('u_del_confirm',{name:u.name}))) return;
+              fetch('/api/users/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:u.id})})
+                .then(function(r){ if(r.ok){ J('/api/users').then(function(d){ render(d.users); }); } });
+            });
+            row.appendChild(del);
+          }
+          list.appendChild(row);
+        });
+      }
+      J('/api/users').then(function(d){ render(d.users); }).catch(function(){});
+      b.appendChild(el('<div style="height:12px"></div>'));
+      var f=el('<form class="pwform"><input id="uName" type="text" placeholder="'+esc(t('u_name_ph'))+'" autocomplete="off"><input id="uUser" type="text" autocapitalize="none" autocorrect="off" placeholder="'+esc(t('u_user_ph'))+'" autocomplete="off"><input id="uPw" type="text" placeholder="'+esc(t('u_pw_ph'))+'" autocomplete="off"><button type="submit" class="btn-primary">'+esc(t('u_add'))+'</button><div class="msgline"></div></form>');
+      var msg=f.querySelector('.msgline');
+      f.addEventListener('submit', function(e){ e.preventDefault(); msg.className='msgline'; msg.textContent='';
+        var body={name:f.querySelector('#uName').value, username:f.querySelector('#uUser').value, password:f.querySelector('#uPw').value};
+        fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+          .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,d:d}; }); })
+          .then(function(res){ if(res.ok){ msg.className='msgline ok'; msg.textContent=t('u_added');
+            f.querySelector('#uName').value=''; f.querySelector('#uUser').value=''; f.querySelector('#uPw').value='';
+            J('/api/users').then(function(d){ render(d.users); }); }
+            else { msg.className='msgline err'; msg.textContent=(res.d&&res.d.detail)||t('pw_fail'); } })
+          .catch(function(){ msg.className='msgline err'; msg.textContent=t('pw_fail'); });
+      });
+      b.appendChild(f);
+    }},
+    about: { title:'row_about', build:function(b){
+      b.appendChild(el('<div style="text-align:center;padding:16px 0 4px"><div style="font-size:calc(40px*var(--tscale));font-weight:700;letter-spacing:-.04em">Able</div><div class="subnote" style="text-align:center;margin:6px 0 0">'+esc(t('about_tag'))+'</div></div>'));
+      var box=el('<div class="fieldcard"><div class="field"><span class="fl">'+esc(t('about_version'))+'</span><span class="fv">1.0</span></div><div class="field"><span class="fl">'+esc(t('about_server'))+'</span><span class="fv" id="abServer">…</span></div><div class="field"><span class="fl">'+esc(t('about_model'))+'</span><span class="fv" id="abModel">…</span></div></div>');
+      b.appendChild(box);
+      J('/api/integrations').then(function(d){ var s=document.getElementById('abServer'); if(s)s.textContent=d.server; var m=document.getElementById('abModel'); if(m)m.textContent=d.voice_model; });
+      b.appendChild(el('<div class="subnote" style="text-align:center;margin-top:16px">'+t('about_note')+'</div>'));
+    }}
+  };
+
+  var subpage=document.getElementById('subpage'), subTitle=document.getElementById('subTitle'), subBody=document.getElementById('subBody');
+  var currentSub=null;
+  document.getElementById('subBack').addEventListener('click', function(){ subpage.classList.remove('open'); currentSub=null; });
+  document.querySelectorAll('.srowi[data-sub]').forEach(function(r){
+    r.addEventListener('click', function(){ openSub(r.getAttribute('data-sub')); });
+  });
+  function openSub(key){
+    var sub=SUBS[key]; if(!sub) return;
+    currentSub=key;
+    subTitle.textContent=t(sub.title); subBody.innerHTML=''; sub.build(subBody);
+    subpage.classList.add('open'); subBody.scrollTop=0;
+  }
+
+  /* ---------- login ---------- */
+  applyLang();
+  var USER={name:'', is_admin:false, google:false};
+  function loadMe(){
+    return fetch('/api/me').then(function(r){return r.json();}).then(function(d){
+      if(d && d.auth){ USER={name:d.name||'', is_admin:!!d.is_admin, google:!!d.google};
+        var ru=document.getElementById('rowUsers'); if(ru) ru.classList.toggle('hidden', !USER.is_admin); }
+      return d;
+    });
+  }
+  var onboard=document.getElementById('onboard');
+  function enterHome(){ onboard.classList.add('hidden'); app.classList.remove('hidden'); tabbar.classList.remove('hidden'); renderGreeting(); loadHome(); }
+  function showApp(){
+    login.classList.add('hidden');
+    loadMe().then(function(){ enterHome(); });
+  }
+  document.getElementById('obConnect').addEventListener('click', connectGoogle);
+  document.getElementById('obLater').addEventListener('click', enterHome);
+  document.getElementById('obLogout').addEventListener('click', function(){
+    fetch('/api/logout',{method:'POST'}).then(function(){ location.reload(); });
+  });
+  loadMe().then(function(d){ if(d && d.auth) showApp(); }).catch(function(){});
+  document.getElementById('loginForm').addEventListener('submit', function(e){
+    e.preventDefault();
+    var usr=document.getElementById('usr').value.trim(), pw=document.getElementById('pw').value, err=document.getElementById('loginErr');
+    err.textContent='';
+    fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:usr, password:pw})})
+      .then(function(r){ if(r.ok){ showApp(); } else { err.textContent=t('login_wrong'); } })
+      .catch(function(){ err.textContent=t('login_err'); });
+  });
+
+  /* ---------- Voice ---------- */
+  var pc=null, dc=null, micStream=null, voiceOn=false, ableText='', micMuted=false;
+  var voiceStart=0, voiceUsage=null;
+  function setVSay(text, who){ vSay.className='vsay'+(who==='user'?' user':''); vSay.textContent=text||''; }
+  function eur(cents){ var s='€'+((cents||0)/100).toFixed(2); return LANG==='nl'? s.replace('.',','):s; }
+  function budgetColor(pct){ return pct>=90?'#D8503F':pct>=60?'#E5A100':'#2FBF71'; }
+  function renderBudget(){
+    if(!voiceUsage) return;
+    var pct=voiceUsage.pct||0, col=budgetColor(pct), full=(voiceUsage.remaining_cents||0)<=0;
+    document.querySelectorAll('.vbudget').forEach(function(box){
+      var fill=box.querySelector('.bfill'), amt=box.querySelector('.bamt');
+      if(fill){ fill.style.width=Math.max(pct,3)+'%'; fill.style.background=col; }
+      if(amt){ amt.textContent=eur(voiceUsage.spent_cents)+' / '+eur(voiceUsage.cap_cents); }
+      box.classList.toggle('full', full);
+    });
+  }
+  function loadVoiceUsage(){
+    return J('/api/voice-usage').then(function(d){ voiceUsage=d; renderBudget(); return d; }).catch(function(){ return voiceUsage; });
+  }
+  function reportVoiceSeconds(){
+    if(!voiceStart) return;
+    var secs=Math.round((Date.now()-voiceStart)/1000); voiceStart=0;
+    if(secs<=0) return;
+    fetch('/api/voice-usage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({seconds:secs})})
+      .then(function(r){return r.json();}).then(function(d){ voiceUsage=d; renderBudget(); }).catch(function(){});
+  }
+  function openVoice(){
+    newChat(); voiceScreen.classList.add('open');
+    loadVoiceUsage().then(function(info){
+      if(info && (info.remaining_cents||0)<=0){ vStatus.textContent=t('voice_budget_full'); return; }
+      if(!voiceOn && !pc) startVoice();
+    });
+  }
+  function closeVoice(){ endVoice(); voiceScreen.classList.remove('open'); }
+  document.getElementById('chatMic').addEventListener('click', openVoice);
+  mic.addEventListener('click', openVoice);
+  document.getElementById('vBack').addEventListener('click', closeVoice);
+  document.getElementById('vEnd').addEventListener('click', closeVoice);
+  document.getElementById('vKeys').addEventListener('click', function(){ closeVoice(); openChat();
+    setTimeout(function(){ msgIn.focus(); }, 400); });
+  document.getElementById('vToChat').addEventListener('click', function(){ closeVoice(); openChat();
+    setTimeout(function(){ msgIn.focus(); }, 400); });
+
+  function endVoice(){
+    reportVoiceSeconds();
+    voiceOn=false; micMuted=false; vMic.classList.remove('muted'); body.className='';
+    try{ if(dc) dc.close(); }catch(e){}
+    try{ if(pc) pc.close(); }catch(e){}
+    try{ if(micStream) micStream.getTracks().forEach(function(t){t.stop();}); }catch(e){}
+    pc=null; dc=null; micStream=null;
+    setVSay(''); vStatus.textContent=t('voice_listen');
+    loadRecents();
+  }
+  function sendEvt(o){ try{ if(dc && dc.readyState==='open') dc.send(JSON.stringify(o)); }catch(e){} }
+  function setMicOn(on){ try{ if(micStream) micStream.getAudioTracks()[0].enabled=on; }catch(e){} }
+  function runFunc(name, call_id, argsStr){
+    fetch('/api/tool',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name, arguments:argsStr})})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        sendEvt({type:'conversation.item.create', item:{ type:'function_call_output', call_id:call_id, output:(d&&d.output)||'ok' }});
+        sendEvt({type:'response.create'});
+      })
+      .catch(function(){
+        sendEvt({type:'conversation.item.create', item:{ type:'function_call_output', call_id:call_id, output:'Fout bij uitvoeren.' }});
+        sendEvt({type:'response.create'});
+      });
+  }
+  function onEvt(ev){
+    var m; try{ m=JSON.parse(ev.data); }catch(e){ return; }
+    var et=m.type||'';
+    if(et.indexOf('speech_started')>=0){ body.className='listening'; ableText='';
+      vStatus.textContent=t('voice_listening'); }
+    else if(et.indexOf('speech_stopped')>=0){ body.className='thinking'; vStatus.textContent=t('voice_thinking'); }
+    else if(et.indexOf('input_audio_transcription.completed')>=0){ if(m.transcript) setVSay(m.transcript,'user'); }
+    else if(et==='output_audio_buffer.started'){ setMicOn(false); body.className='speaking';
+      vStatus.textContent=t('voice_interrupt'); }
+    else if(et==='output_audio_buffer.stopped' || et==='output_audio_buffer.cleared'){
+      setTimeout(function(){ setMicOn(!micMuted); }, 300);
+      body.className=''; vStatus.textContent=t('voice_listen');
+    }
+    else if(et.indexOf('audio_transcript.delta')>=0){
+      body.className='speaking';
+      ableText+=(m.delta||''); setVSay(ableText);
+      vSay.scrollTop=vSay.scrollHeight;
+    }
+    else if(et==='response.done'){
+      var out=(m.response&&m.response.output)||[];
+      out.forEach(function(item){ if(item.type==='function_call'){ runFunc(item.name, item.call_id, item.arguments); } });
+    }
+  }
+  async function startVoice(){
+    setVSay(''); vStatus.textContent=t('voice_moment');
+    try{
+      micStream=await navigator.mediaDevices.getUserMedia({audio:{
+        echoCancellation:true, noiseSuppression:true, autoGainControl:true }});
+    }
+    catch(e){ vStatus.textContent=t('voice_mic_denied'); return; }
+    var sres;
+    try{ sres=await fetch('/api/realtime-session',{method:'POST'}); }
+    catch(e){ vStatus.textContent=t('voice_start_fail'); return; }
+    if(!sres.ok){
+      if(sres.status===402){ vStatus.textContent=t('voice_budget_full'); loadVoiceUsage(); }
+      else vStatus.textContent=t('voice_start_fail_code',{c:sres.status});
+      return;
+    }
+    var data=await sres.json();
+    var eph=data.value;
+    if(!eph){ vStatus.textContent=t('voice_no_key'); return; }
+    try{
+      pc=new RTCPeerConnection();
+      pc.ontrack=function(e){ remoteAudio.srcObject=e.streams[0]; remoteAudio.play&&remoteAudio.play().catch(function(){}); };
+      pc.addTrack(micStream.getTracks()[0], micStream);
+      dc=pc.createDataChannel('oai-events');
+      dc.onmessage=onEvt;
+      dc.onopen=function(){ voiceOn=true; voiceStart=Date.now(); body.className=''; vStatus.textContent=t('voice_listen'); };
+      var offer=await pc.createOffer(); await pc.setLocalDescription(offer);
+      var sdpRes=await fetch('https://api.openai.com/v1/realtime/calls?model='+encodeURIComponent(data.model), {
+        method:'POST', body:offer.sdp, headers:{ 'Authorization':'Bearer '+eph, 'Content-Type':'application/sdp' }});
+      if(!sdpRes.ok){ vStatus.textContent=t('voice_conn_refused'); return; }
+      await pc.setRemoteDescription({ type:'answer', sdp: await sdpRes.text() });
+    }catch(e){ vStatus.textContent=t('voice_conn_fail'); }
+  }
+
+  orb.addEventListener('click', function(){
+    if(voiceOn && body.className==='speaking'){
+      sendEvt({type:'response.cancel'});
+      sendEvt({type:'output_audio_buffer.clear'});
+      setMicOn(!micMuted); body.className=''; vStatus.textContent=t('voice_listen');
+    }
+  });
+  vMic.addEventListener('click', function(){
+    if(!voiceOn) return;
+    if(body.className==='speaking'){
+      sendEvt({type:'response.cancel'});
+      sendEvt({type:'output_audio_buffer.clear'});
+      body.className=''; setMicOn(!micMuted); vStatus.textContent=t('voice_listen');
+      return;
+    }
+    micMuted=!micMuted; setMicOn(!micMuted);
+    vMic.classList.toggle('muted', micMuted);
+    vStatus.textContent=micMuted?t('voice_mic_off'):t('voice_listen');
+  });
+})();
+</script>
+</body>
+</html>
