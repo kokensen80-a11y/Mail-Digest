@@ -66,8 +66,8 @@
 }
 
 * { box-sizing: border-box; }
-html { min-width: 320px; min-height: 100%; background: var(--canvas-deep); }
-body { min-width: 320px; min-height: 100dvh; margin: 0; overflow-x: hidden; overscroll-behavior-y: contain; overscroll-behavior-x: none; background: var(--canvas-deep); color: var(--text); font-family: var(--font-body); font-size: 16px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+html { min-width: 320px; height: 100%; background: var(--app-background); }
+body { min-width: 320px; height: 100%; margin: 0; overflow-x: hidden; overscroll-behavior-y: contain; overscroll-behavior-x: none; background: var(--app-background); color: var(--text); font-family: var(--font-body); font-size: 16px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
 button, input { font: inherit; }
 button, input, .kicker, .status-pill, .active-label, .setting-value, .sheet-meta { font-family: var(--font-ui); }
 h1, h2, .voice-state-label, .chat-overlay header strong { font-family: var(--font-display); font-optical-sizing: auto; }
@@ -84,7 +84,7 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
 .skip-link { position: fixed; z-index: 1000; top: 10px; left: 10px; padding: 10px 14px; border-radius: 12px; background: var(--highlight); color: #09332C; transform: translateY(-160%); transition: transform .2s; }
 .skip-link:focus { transform: translateY(0); }
 
-.device-shell { position: relative; isolation: isolate; width: min(100%, 430px); height: 100dvh; margin: auto; overflow: hidden; background: var(--app-background); background-size: cover; background-position: center; transition: background .45s var(--ease), color .3s var(--ease); }
+.device-shell { position: relative; isolation: isolate; width: min(100%, 430px); height: 100%; margin: auto; overflow: hidden; background: var(--app-background); background-size: cover; background-position: center; transition: background .45s var(--ease), color .3s var(--ease); }
 .theme-background { position: absolute; z-index: 0; inset: 0; overflow: hidden; pointer-events: none; }
 .forest-background { display: block; background: #09332C; }
 :root[data-theme="light"] .forest-background { display: none; }
