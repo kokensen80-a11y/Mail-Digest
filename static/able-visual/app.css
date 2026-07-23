@@ -609,3 +609,8 @@ body:not(.ambient-on) .hero-card::after, body:not(.ambient-on) .ambient-field { 
 
 /* Refresh: geen bevestigingsvinkje tonen */
 .resolve-mark { display: none !important; }
+
+/* --- Fixes: dienst-namen afkappen, voice-X in rondje --- */
+.setting-row > span { min-width: 0; }
+.setting-row strong, .setting-row small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.voice-header .icon-button { background: color-mix(in srgb, #F3F3F2 55%, transparent); border: 1px solid rgba(10,10,10,.08); border-radius: 50%; box-shadow: var(--shadow-card); color: rgba(10,10,10,.62); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
