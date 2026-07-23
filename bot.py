@@ -21,6 +21,7 @@ from __future__ import annotations
 import contextvars
 import json
 import os
+import re
 import smtplib
 import sqlite3
 import ssl
@@ -1289,7 +1290,7 @@ def _dynamic_context(context: str, agenda: str, session_drafts: list[dict]) -> s
          f"tijdzone en gebruik deze offset in de ISO-tijden (bijv. ...T15:00:00{now.strftime('%z')[:3]}:00)."
          + "\n\n--- De agenda (gebruik dit om 'ben ik druk?' te beantwoorden) ---\n"
          + agenda
-         + "\n\n--- Openstaande taken van Ko ---\n" + todos_context()
+         + f"\n\n--- Openstaande taken van {_name} ---\n" + todos_context()
          + "\n\n--- " + features_status()
          + "\n\n--- Recente mail als context ---\n" + context)
     if session_drafts:
@@ -1298,20 +1299,34 @@ def _dynamic_context(context: str, agenda: str, session_drafts: list[dict]) -> s
             s += (f"{i}. account={d.get('account')} aan={d.get('to')} "
                   f"onderwerp={d.get('subject')}\n   tekst: {d.get('body')}\n")
     if _get_setting("lang", "nl") == "en":
-        s += ("\n\n--- LANGUAGE ---\nKo has set the app language to English. Write all "
-              "your replies to Ko in English. Assume Ko writes to you in English; never "
-              "translate his words to Dutch. Keep the same helpful, concise style.")
+        s += (f"\n\n--- LANGUAGE ---\n{_name} has set the app language to English. Write all "
+              f"your replies to {_name} in English. Assume {_name} writes to you in English; "
+              "never translate to Dutch. Keep the same helpful, concise style.")
     return s
 
 
+def _current_name() -> str:
+    u = get_user(cur_uid())
+    return (u["name"] if u and u["name"] else "Ko")
+
+
+def _personalize(text: str, name: str) -> str:
+    """Vervang de hardcoded 'Ko' in de prompt door de naam van de huidige gebruiker.
+    Voor Ko (naam == 'Ko') verandert er niets, zodat zijn prompt gecachet blijft."""
+    if name == "Ko":
+        return text
+    return re.sub(r"\bKo\b", name, text.replace("Ko's", name + "'s"))
+
+
 def _build_system(context: str, agenda: str, session_drafts: list[dict]) -> str:
-    return SYSTEM_PROMPT + "\n\n" + _dynamic_context(context, agenda, session_drafts)
+    return (_personalize(SYSTEM_PROMPT, _current_name()) + "\n\n"
+            + _dynamic_context(context, agenda, session_drafts))
 
 
 def _system_blocks(context: str, agenda: str, session_drafts: list[dict]) -> list[dict]:
     """Systeemprompt als blokken: constante kop gecachet, wisselend deel niet."""
     return [
-        {"type": "text", "text": SYSTEM_PROMPT,
+        {"type": "text", "text": _personalize(SYSTEM_PROMPT, _current_name()),
          "cache_control": {"type": "ephemeral"}},
         {"type": "text", "text": _dynamic_context(context, agenda, session_drafts)},
     ]
@@ -1322,7 +1337,12 @@ def _cached_tools() -> list[dict]:
     grote) tool-schema gecachet wordt en niet elke beurt opnieuw verwerkt hoeft."""
     if not ALL_TOOLS:
         return ALL_TOOLS
-    tools = list(ALL_TOOLS)
+    name = _current_name()
+    base = ALL_TOOLS
+    if name != "Ko":
+        # Ook de tool-beschrijvingen ("Ko's agenda" enz.) naar de juiste naam.
+        base = json.loads(_personalize(json.dumps(ALL_TOOLS, ensure_ascii=False), name))
+    tools = list(base)
     last = dict(tools[-1])
     last["cache_control"] = {"type": "ephemeral"}
     tools[-1] = last
