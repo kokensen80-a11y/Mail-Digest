@@ -566,3 +566,20 @@ body:not(.ambient-on) .hero-card::after, body:not(.ambient-on) .ambient-field { 
 /* --- Profiel-icoon: alleen bovenaan zichtbaar, fadet weg bij scrollen --- */
 .topbar-avatar { transition: opacity .2s ease, transform .2s ease; }
 .topbar-avatar.scrolled { opacity: 0; transform: translateY(-8px); pointer-events: none; }
+
+/* --- Opstartscherm (splash) --- */
+.splash { position: fixed; inset: 0; z-index: 2000; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 20px; background: #09332C;
+  transition: opacity .5s ease; }
+.splash.gone { opacity: 0; pointer-events: none; }
+.splash-icon { width: 132px; height: 132px; filter: drop-shadow(0 20px 44px rgba(0,0,0,.42));
+  animation: splash-pop .6s var(--ease) both; }
+.splash-word { font-family: "Changa", var(--font-display); font-size: 58px; font-weight: 700;
+  line-height: 1; letter-spacing: -.06em; color: #F3F3F2; animation: splash-pop .6s var(--ease) .08s both; }
+@keyframes splash-pop { from { opacity: 0; transform: scale(.92) translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* --- Instellingen: detail-panelen met terug-knop --- */
+.detail-header { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+.detail-header h1 { margin: 0; font-size: clamp(30px, 8vw, 40px); font-weight: 650; letter-spacing: -.045em; line-height: 1; font-family: var(--font-display); }
+.back-btn { display: grid; place-items: center; width: 44px; height: 44px; min-width: 44px; flex: none; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); box-shadow: var(--shadow-card); color: var(--text); }
+[data-settings-panel] { animation: screen-crossfade .26s var(--ease) both; }

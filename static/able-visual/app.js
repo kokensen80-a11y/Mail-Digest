@@ -333,10 +333,10 @@
 
   // --- Gebruikersbeheer (alleen admin) ----------------------------------------
   const loadUsers = async () => {
-    const group = qs('[data-admin-users]');
-    if (!group) return;
-    if (!currentUser || !currentUser.is_admin) { group.hidden = true; return; }
-    group.hidden = false;
+    const menuRow = qs('[data-admin-only]');
+    const admin = !!(currentUser && currentUser.is_admin);
+    if (menuRow) menuRow.hidden = !admin;
+    if (!admin) return;
     let users = [];
     try { users = (await (await api('/api/users')).json()).users || []; } catch (e) {}
     const list = qs('[data-users-list]');
@@ -357,7 +357,22 @@
     }));
   };
 
+  // Instellingen als menu met detail-panelen (uitvouwen + terug).
+  const openSettingsPanel = (name) => {
+    const menu = qs('[data-settings-menu]');
+    if (menu) menu.hidden = true;
+    qsa('[data-settings-panel]').forEach((p) => { p.hidden = p.dataset.settingsPanel !== name; });
+    if (appMain) appMain.scrollTo({ top: 0, behavior: 'auto' });
+  };
+  const closeSettingsPanel = () => {
+    qsa('[data-settings-panel]').forEach((p) => { p.hidden = true; });
+    const menu = qs('[data-settings-menu]');
+    if (menu) menu.hidden = false;
+    if (appMain) appMain.scrollTo({ top: 0, behavior: 'auto' });
+  };
+
   const loadMore = () => {
+    closeSettingsPanel();
     loadIntegrations();
     loadVoiceBudget();
     loadUsers();
@@ -1062,6 +1077,8 @@
   qsa('[data-text-seg] button').forEach((b) => b.addEventListener('click', () => applyTextScale(b.dataset.textSize)));
   qsa('[data-lang-seg] button').forEach((b) => b.addEventListener('click', () => setLang(b.dataset.lang)));
   qsa('[data-voice-seg] button').forEach((b) => b.addEventListener('click', () => setVoice(b.dataset.voiceGender)));
+  qsa('[data-settings-open]').forEach((b) => b.addEventListener('click', () => openSettingsPanel(b.dataset.settingsOpen)));
+  qsa('[data-settings-back]').forEach((b) => b.addEventListener('click', closeSettingsPanel));
 
   // Privacy / voorwaarden in een bottom-sheet.
   const PRIVACY_DOCS = {
@@ -1138,6 +1155,16 @@
   if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
     window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
   }
+
+  // Opstartscherm weglaten zodra de app geladen is (min. ~1,3s zichtbaar).
+  const hideSplash = () => {
+    const s = qs('[data-splash]');
+    if (s && !s.classList.contains('gone')) {
+      s.classList.add('gone');
+      window.setTimeout(() => { s.hidden = true; }, 520);
+    }
+  };
+  window.setTimeout(hideSplash, 1300);
 
   applyTheme(state.theme);
   applyAmbient();
