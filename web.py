@@ -50,16 +50,17 @@ def client():
     return _client
 
 # Mail-/agenda-context op de achtergrond bijhouden zodat antwoorden snel zijn.
-_ctx = {"mail": "(wordt geladen…)", "agenda": "(wordt geladen…)"}
+_ctx = {"mail": "(wordt geladen…)", "agenda": "(wordt geladen…)", "mails": []}
 _ctx_lock = threading.Lock()
 
 def _refresh_ctx():
     while True:
         try:
             accounts = bot.load_accounts()
-            m = bot._format_context(bot.gather_mail_context(accounts))
+            mails = bot.gather_mail_context(accounts)
             with _ctx_lock:
-                _ctx["mail"] = m
+                _ctx["mail"] = bot._format_context(mails)
+                _ctx["mails"] = mails
         except Exception as e:
             print(f"mailctx: {e}")
         try:
@@ -608,6 +609,25 @@ async def api_mailtab(req: Request):
         items.append({"to": f["to_email"], "subject": f["subject"] or "(geen onderwerp)",
                       "days": days})
     return {"followups": items}
+
+
+@app.get("/api/mail")
+async def api_mail(req: Request):
+    """Recente inbox voor het mail-scherm. Alleen Ko (1) heeft nu leestoegang
+    (IMAP-mailboxen); gasten hebben alleen verzenden -> supported False."""
+    if not _authed(req):
+        raise HTTPException(401, "Niet ingelogd")
+    if _uid(req) != 1:
+        return {"items": [], "supported": False}
+    with _ctx_lock:
+        mails = list(_ctx.get("mails", []))
+    items = [{
+        "sender": m.sender, "subject": m.subject or "(geen onderwerp)",
+        "preview": (m.body or "").strip().replace("\n", " ")[:120],
+        "date": m.date.isoformat() if m.date else None,
+        "account": m.account,
+    } for m in mails if not getattr(m, "is_noise", False)]
+    return {"items": items, "supported": True}
 
 
 # Menselijke namen voor de OpenAI-stemmen (m = man, v = vrouw).

@@ -329,6 +329,59 @@
     api('/api/settings').then((r) => r.json()).then((s) => applyLangUI(s.lang || 'nl')).catch(() => {});
   };
 
+  // --- Mail -------------------------------------------------------------------
+  const senderName = (s) => {
+    s = (s || '').trim();
+    const lt = s.indexOf('<');
+    if (lt > 0) return (s.slice(0, lt).replace(/["']/g, '').trim()) || s.slice(lt + 1).replace('>', '');
+    if (s.includes('@')) return s.split('@')[0];
+    return s || 'Onbekend';
+  };
+  const mailWhen = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso); const now = new Date();
+    if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
+    const days = Math.round((now - d) / 86400000);
+    if (days <= 1) return 'gisteren';
+    if (days < 7) return `${days} dagen`;
+    return d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
+  };
+  const loadMail = async () => {
+    const body = qs('[data-mail-body]');
+    if (!body) return;
+    let d = { items: [], supported: true };
+    try { d = await (await api('/api/mail')).json(); } catch (e) {}
+    if (!d.supported) {
+      body.innerHTML = '<div class="empty-state"><span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg></span><h2>Mail-lezen komt eraan.</h2><p>Voor dit account is nog geen mailbox om te lezen gekoppeld.</p></div>';
+      return;
+    }
+    const items = d.items || [];
+    if (!items.length) {
+      body.innerHTML = '<div class="empty-state"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></span><h2>Inbox is rustig.</h2><p>Geen recente mail.</p></div>';
+      return;
+    }
+    const av = (s) => escapeHTML(senderName(s).slice(0, 1).toUpperCase());
+    const first = items[0];
+    const rest = items.slice(1);
+    let html = `<article class="mail-priority-card hover-card">
+      <div class="mail-priority-top"><span class="avatar">${av(first.sender)}</span><span><strong>${escapeHTML(senderName(first.sender))}</strong><small>${escapeHTML(mailWhen(first.date))}</small></span><span class="status-pill">Nieuwste</span></div>
+      <h2>${escapeHTML(first.subject)}</h2>
+      <button class="primary-button" type="button" data-mail-open="0"><span>Bespreek met Able</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+    </article>`;
+    if (rest.length) {
+      html += '<div class="list-card mail-list">' + rest.map((m, i) => `
+        <button class="list-row press-card list-appear" type="button" data-mail-open="${i + 1}"><span class="avatar">${av(m.sender)}</span><span><strong>${escapeHTML(senderName(m.sender))}</strong><small>${escapeHTML(m.subject)} · ${escapeHTML(mailWhen(m.date))}</small></span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>`).join('') + '</div>';
+    }
+    body.innerHTML = html;
+    qsa('[data-mail-open]', body).forEach((btn) => btn.addEventListener('click', () => {
+      const m = items[Number(btn.dataset.mailOpen)];
+      if (!m) return;
+      openChat();
+      const input = qs('[data-chat-form] input');
+      if (input) { input.value = `Help me met de mail van ${senderName(m.sender)} over "${m.subject}".`; input.focus(); }
+    }));
+  };
+
   // --- Planning: echte agenda-tijdlijn + week-strip ---------------------------
   const WD_SHORT = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
   const dateKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -452,6 +505,7 @@
       activeScreen = target;
       if (target === 'planning') { loadPlanning(); loadTasks(); }
       if (target === 'more') loadMore();
+      if (target === 'mail') loadMail();
       appView.classList.toggle('voice-active', target === 'voice');
       const navOrder = ['home', 'planning', 'voice', 'mail', 'more'];
       root.style.setProperty('--nav-index', String(navOrder.indexOf(target)));
