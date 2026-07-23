@@ -36,6 +36,9 @@
   const toastText = qs('[data-toast-text]');
   const toastAction = qs('[data-toast-action]');
   const loadingOverlay = qs('[data-loading-overlay]');
+  const isDemoMode = window.location.protocol === 'file:'
+    || window.location.hostname === 'localhost'
+    || window.location.hostname === '127.0.0.1';
   let activeScreen = 'home';
   let toastTimer;
   let undoAction = null;
@@ -124,11 +127,7 @@
       setText('[data-count-waiting]', String((mt.followups || []).length));
     } catch (e) {}
 
-    try {
-      const todos = (await (await api('/api/todos')).json()).items || [];
-      state.tasks = todos.map((t) => ({ id: t.id, title: t.text || '', complete: false }));
-      renderTasks();
-    } catch (e) {}
+    await loadTasks();
 
     try {
       const hist = (await (await api('/api/history')).json()).items || [];
@@ -209,31 +208,98 @@
     updateTaskCount();
 
     qsa('[data-toggle-task]', list).forEach((button) => {
-      button.addEventListener('click', () => {
+      button.addEventListener('click', async () => {
         const id = Number(button.closest('[data-task-id]').dataset.taskId);
-        const task = state.tasks.find((item) => item.id === id);
-        if (!task) return;
-        task.complete = !task.complete;
-        save();
-        renderTasks();
-        showToast(task.complete ? 'Taak afgerond.' : 'Taak opnieuw geopend.');
+        try { await api('/api/todos/done', { method: 'POST', body: JSON.stringify({ id }) }); } catch (e) {}
+        await loadTasks();
+        showToast('Taak afgerond.');
       });
     });
     qsa('[data-delete-task]', list).forEach((button) => {
-      button.addEventListener('click', () => {
+      button.addEventListener('click', async () => {
         const id = Number(button.closest('[data-task-id]').dataset.taskId);
-        const index = state.tasks.findIndex((item) => item.id === id);
-        if (index < 0) return;
-        const [deleted] = state.tasks.splice(index, 1);
-        save();
-        renderTasks();
-        showToast('Taak verwijderd.', 'Ongedaan maken', () => {
-          state.tasks.splice(index, 0, deleted);
-          save();
-          renderTasks();
+        const task = state.tasks.find((item) => item.id === id);
+        const title = task ? task.title : '';
+        try { await api('/api/todos/delete', { method: 'POST', body: JSON.stringify({ id }) }); } catch (e) {}
+        await loadTasks();
+        showToast('Taak verwijderd.', 'Ongedaan maken', async () => {
+          if (!title) return;
+          try { await api('/api/todos/add', { method: 'POST', body: JSON.stringify({ text: title }) }); } catch (e) {}
+          await loadTasks();
         });
       });
     });
+  };
+
+  const loadTasks = async () => {
+    try {
+      const todos = (await (await api('/api/todos')).json()).items || [];
+      state.tasks = todos.map((t) => ({ id: t.id, title: t.text || '', complete: false }));
+    } catch (e) {}
+    renderTasks();
+  };
+
+  // --- Planning: echte agenda-tijdlijn + week-strip ---------------------------
+  const WD_SHORT = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
+  const dateKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  let planningSelectedKey = null;
+
+  const renderTimeline = (byDay, key) => {
+    const tl = qs('.timeline');
+    if (!tl) return;
+    const events = (byDay[key] || []).slice().sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+    if (!events.length) {
+      tl.innerHTML = '<div class="empty-state"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></span><h2>Niets gepland.</h2><p>Een rustige dag.</p></div>';
+      return;
+    }
+    const nowMs = Date.now();
+    const nextIdx = events.findIndex((e) => e.iso && new Date(e.iso).getTime() >= nowMs);
+    tl.innerHTML = events.map((e, i) => `
+      <article class="timeline-item list-appear${i === nextIdx ? ' is-next' : ''}">
+        <time>${escapeHTML(e.time || '')}</time><i></i>
+        <div><strong>${escapeHTML(e.title || '')}</strong>${e.allday ? '<small>hele dag</small>' : ''}</div>
+      </article>`).join('');
+  };
+
+  const loadPlanning = async () => {
+    let agenda = [];
+    try { agenda = (await (await api('/api/agenda')).json()).items || []; } catch (e) {}
+    const byDay = {};
+    agenda.forEach((e) => { if (e.iso) { const k = dateKey(new Date(e.iso)); (byDay[k] = byDay[k] || []).push(e); } });
+
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const monday = new Date(today); monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+    const days = [];
+    for (let i = 0; i < 7; i++) { const d = new Date(monday); d.setDate(monday.getDate() + i); days.push(d); }
+    const todayKey = dateKey(today);
+    if (!planningSelectedKey || !days.some((d) => dateKey(d) === planningSelectedKey)) planningSelectedKey = todayKey;
+
+    const strip = qs('.date-strip');
+    if (strip) {
+      const slider = qs('.date-slider', strip);
+      strip.innerHTML = '';
+      if (slider) strip.appendChild(slider);
+      days.forEach((d, index) => {
+        const k = dateKey(d);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        if (byDay[k]) btn.classList.add('has-events');
+        if (k === todayKey) btn.classList.add('is-today');
+        btn.setAttribute('aria-pressed', String(k === planningSelectedKey));
+        btn.innerHTML = `<span>${WD_SHORT[d.getDay()]}</span><strong>${d.getDate()}</strong><i aria-hidden="true"></i>`;
+        btn.addEventListener('click', () => {
+          planningSelectedKey = k;
+          qsa('button', strip).forEach((b) => b.setAttribute('aria-pressed', 'false'));
+          btn.setAttribute('aria-pressed', 'true');
+          strip.style.setProperty('--day-offset', `calc(${index * 100}% + ${index * 3}px)`);
+          renderTimeline(byDay, k);
+        });
+        strip.appendChild(btn);
+      });
+      const selIdx = days.findIndex((d) => dateKey(d) === planningSelectedKey);
+      strip.style.setProperty('--day-offset', `calc(${selIdx * 100}% + ${selIdx * 3}px)`);
+    }
+    renderTimeline(byDay, planningSelectedKey);
   };
 
   const planningTab = (tab) => {
@@ -294,6 +360,7 @@
         element.classList.add('list-appear');
       });
       activeScreen = target;
+      if (target === 'planning') { loadPlanning(); loadTasks(); }
       appView.classList.toggle('voice-active', target === 'voice');
       const navOrder = ['home', 'planning', 'voice', 'mail', 'more'];
       root.style.setProperty('--nav-index', String(navOrder.indexOf(target)));
@@ -416,15 +483,14 @@
     window.setTimeout(() => planningTab('tasks'), 150);
   }));
 
-  qs('[data-task-form]')?.addEventListener('submit', (event) => {
+  qs('[data-task-form]')?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const input = qs('input', event.currentTarget);
     const title = input.value.trim();
     if (!title) return;
-    state.tasks.unshift({ id: Date.now(), title, complete: false });
     input.value = '';
-    save();
-    renderTasks();
+    try { await api('/api/todos/add', { method: 'POST', body: JSON.stringify({ text: title }) }); } catch (e) {}
+    await loadTasks();
     showToast('Taak toegevoegd.');
   });
 
@@ -687,6 +753,16 @@
 
   // Echte sessie: vraag de server wie er is ingelogd i.p.v. localStorage.
   const boot = async () => {
+    if (isDemoMode) {
+      applyUser({ auth: true, name: 'Ko' });
+      state.onboarded = true;
+      save();
+      setOnboardedView();
+      const initialTarget = window.location.hash.slice(1);
+      if (['planning', 'voice', 'mail', 'more'].includes(initialTarget)) navigate(initialTarget, false, false);
+      else window.history.replaceState({ screen: 'home' }, '', '#home');
+      return;
+    }
     let me = { auth: false };
     try { me = await (await api('/api/me')).json(); } catch (e) {}
     if (me && me.auth) { applyUser(me); loadHome(); state.onboarded = true; }

@@ -563,7 +563,8 @@ async def api_todo_done(req: Request):
         raise HTTPException(401, "Niet ingelogd")
     data = await req.json()
     con = sqlite3.connect(bot.DB_PATH)
-    con.execute("UPDATE todos SET done = 1 WHERE id = ?", (int(data.get("id", 0)),))
+    con.execute("UPDATE todos SET done = 1 WHERE id = ? AND user_id = ?",
+                (int(data.get("id", 0)), _uid(req)))
     con.commit()
     con.close()
     return {"ok": True}
@@ -577,6 +578,19 @@ async def api_todo_add(req: Request):
     text = (data.get("text") or "").strip()
     if text:
         bot.todo_add(text, (data.get("due") or "").strip() or None)
+    return {"ok": True}
+
+
+@app.post("/api/todos/delete")
+async def api_todo_delete(req: Request):
+    if not _authed(req):
+        raise HTTPException(401, "Niet ingelogd")
+    data = await req.json()
+    con = sqlite3.connect(bot.DB_PATH)
+    con.execute("DELETE FROM todos WHERE id = ? AND user_id = ?",
+                (int(data.get("id", 0)), _uid(req)))
+    con.commit()
+    con.close()
     return {"ok": True}
 
 
