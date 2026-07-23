@@ -82,6 +82,55 @@
   };
   const clearLoginError = () => { if (loginErrorEl) loginErrorEl.textContent = ''; };
 
+  // --- Home-data (echte agenda / taken / follow-ups) --------------------------
+  const relTime = (iso) => {
+    if (!iso) return '';
+    const diffMin = Math.round((new Date(iso).getTime() - Date.now()) / 60000);
+    if (diffMin < 0) return '';
+    if (diffMin < 60) return `over ${diffMin} min`;
+    const hrs = Math.round(diffMin / 60);
+    if (hrs < 24) return `over ${hrs} uur`;
+    const days = Math.round(hrs / 24);
+    return days <= 1 ? 'morgen' : `over ${days} dagen`;
+  };
+  const isSameDay = (iso) => {
+    if (!iso) return false;
+    const d = new Date(iso); const n = new Date();
+    return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
+  };
+  const setText = (selector, value) => { const el = qs(selector); if (el) el.textContent = value; };
+
+  const loadHome = async () => {
+    let agenda = [];
+    try { agenda = (await (await api('/api/agenda')).json()).items || []; } catch (e) {}
+    const nowMs = Date.now();
+    const upcoming = agenda.filter((x) => !x.iso || new Date(x.iso).getTime() >= nowMs - 3600000);
+    const next = upcoming[0];
+    if (next) {
+      setText('[data-hero-time]', next.time || '—');
+      setText('[data-hero-title]', next.title || 'Afspraak');
+      setText('[data-hero-sub]', next.day || '');
+      setText('[data-hero-rel]', isSameDay(next.iso) ? (relTime(next.iso) || 'vandaag') : (next.day || ''));
+    } else {
+      setText('[data-hero-time]', '—');
+      setText('[data-hero-title]', 'Geen afspraken');
+      setText('[data-hero-sub]', 'Je agenda is rustig');
+      setText('[data-hero-rel]', '');
+    }
+    setText('[data-count-appointments]', String(agenda.filter((x) => isSameDay(x.iso)).length));
+
+    try {
+      const mt = await (await api('/api/mailtab')).json();
+      setText('[data-count-waiting]', String((mt.followups || []).length));
+    } catch (e) {}
+
+    try {
+      const todos = (await (await api('/api/todos')).json()).items || [];
+      state.tasks = todos.map((t) => ({ id: t.id, title: t.text || '', complete: false }));
+      renderTasks();
+    } catch (e) {}
+  };
+
   const applyTheme = (theme) => {
     state.theme = theme === 'light' ? 'light' : 'forest';
     root.dataset.theme = state.theme;
@@ -200,6 +249,7 @@
     loadingOverlay.hidden = false;
 
     window.setTimeout(() => {
+      loadHome();
       loadingOverlay.classList.add('is-resolving');
       body.classList.add('is-resolving');
       window.setTimeout(() => {
@@ -305,6 +355,7 @@
       let me = { auth: true, name: '' };
       try { me = await (await api('/api/me')).json(); } catch (e) {}
       applyUser(me);
+      loadHome();
       state.onboarded = true;
       save();
       body.classList.add('is-resolving');
@@ -569,7 +620,7 @@
   const boot = async () => {
     let me = { auth: false };
     try { me = await (await api('/api/me')).json(); } catch (e) {}
-    if (me && me.auth) { applyUser(me); state.onboarded = true; }
+    if (me && me.auth) { applyUser(me); loadHome(); state.onboarded = true; }
     else { state.onboarded = false; }
     save();
     setOnboardedView();

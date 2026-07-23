@@ -534,10 +534,12 @@ async def api_agenda(req: Request):
         if s:
             loc = s.astimezone(bot.LOCAL_TZ)
             items.append({"day": f"{DAYS_NL[loc.weekday()]} {loc.day} {loc.strftime('%b').lower()}",
-                          "time": loc.strftime("%H:%M"), "title": title})
+                          "time": loc.strftime("%H:%M"), "title": title,
+                          "iso": loc.isoformat()})
         else:
             d = e.get("start", {}).get("date", "?")
-            items.append({"day": d, "time": "hele dag", "title": title})
+            items.append({"day": d, "time": "hele dag", "title": title,
+                          "iso": (d + "T00:00:00") if d != "?" else None, "allday": True})
     return {"items": items}
 
 
