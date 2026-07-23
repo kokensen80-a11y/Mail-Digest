@@ -1,21 +1,29 @@
-const CACHE_NAME = 'able-visual-v19';
-const APP_SHELL = ['./', './index.html', './app.css', './app.js', './icon.svg', './manifest.webmanifest', './assets/able-logo-dark-256.png', './assets/able-logo-light-256.png', './assets/gmail.svg', './assets/google-calendar.svg', './assets/openai.svg'];
+const CACHE_NAME = 'able-visual-v23';
+const APP_SHELL = ['./', './index.html', './app.css', './app.js', './manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL).catch(() => {})));
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))));
+  event.waitUntil(caches.keys().then((keys) =>
+    Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))));
   self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
-  event.respondWith(caches.match(event.request).then((cached) => cached || fetch(event.request).then((response) => {
-    const copy = response.clone();
-    caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-    return response;
-  }).catch(() => caches.match('./index.html'))));
+  const url = new URL(event.request.url);
+  // Nooit /api of /oauth cachen; alleen same-origin app-bestanden.
+  if (url.origin !== location.origin) return;
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/oauth')) return;
+  // Network-first: haal altijd de nieuwste versie, val terug op cache bij offline.
+  event.respondWith(
+    fetch(event.request).then((response) => {
+      const copy = response.clone();
+      caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {});
+      return response;
+    }).catch(() => caches.match(event.request).then((c) => c || caches.match('./index.html')))
+  );
 });
