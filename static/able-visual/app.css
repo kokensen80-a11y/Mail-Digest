@@ -331,13 +331,14 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
 .switch input:checked + i::after { background: var(--primary-ink); transform: translateX(20px); }
 .switch input:focus-visible + i { outline: 3px solid var(--highlight); outline-offset: 3px; }
 
-.bottom-navigation { position: absolute; z-index: 50; left: 14px; right: 14px; bottom: max(10px, env(safe-area-inset-bottom)); display: grid; grid-template-columns: repeat(5, 1fr); min-height: 72px; padding: 7px; border: 1px solid var(--line); border-radius: var(--radius-xl); background: var(--glass); box-shadow: var(--shadow-float); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
-.nav-slider { position: absolute; z-index: 0; top: 7px; bottom: 7px; left: 7px; width: calc((100% - 14px) / 5); border-radius: calc(var(--radius-xl) - 7px); background: var(--surface-raised); box-shadow: var(--shadow-card); transform: translateX(calc(var(--nav-index) * 100%)); transition: transform .34s var(--ease), background .25s; }
-.nav-button { position: relative; z-index: 1; display: grid; place-items: center; min-width: 0; min-height: 58px; padding: 0; border: 0; border-radius: calc(var(--radius-xl) - 7px); background: transparent; color: var(--text-faint); }
+.bottom-navigation { position: absolute; z-index: 50; left: 16px; right: 16px; bottom: max(8px, env(safe-area-inset-bottom)); display: grid; grid-template-columns: repeat(5, 1fr); min-height: 56px; padding: 5px; border: 1px solid var(--line); border-radius: var(--radius-l); background: var(--glass); box-shadow: var(--shadow-float); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+.nav-slider { position: absolute; z-index: 0; top: 5px; bottom: 5px; left: 5px; width: calc((100% - 10px) / 5); border-radius: calc(var(--radius-l) - 5px); background: var(--surface-raised); box-shadow: var(--shadow-card); transform: translateX(calc(var(--nav-index) * 100%)); transition: transform .34s var(--ease), background .25s; }
+.nav-button { position: relative; z-index: 1; display: grid; place-items: center; min-width: 0; min-height: 46px; padding: 0; border: 0; border-radius: calc(var(--radius-l) - 5px); background: transparent; color: var(--text-faint); }
+.nav-button svg { width: 21px; height: 21px; }
 .nav-button > svg { width: 29px; height: 29px; stroke-width: 1.8; }
 .nav-button.is-selected { color: var(--primary); }
 .voice-nav-button { position: relative; }
-.voice-nav-core { display: grid; place-items: center; width: 54px; height: 54px; margin: 0; border-radius: 50%; background: var(--voice-button); color: var(--voice-icon); box-shadow: var(--shadow-card); transition: transform .2s var(--ease), box-shadow .2s; }
+.voice-nav-core { display: grid; place-items: center; width: 44px; height: 44px; margin: 0; border-radius: 50%; background: var(--voice-button); color: var(--voice-icon); box-shadow: var(--shadow-card); transition: transform .2s var(--ease), box-shadow .2s; }
 .voice-nav-button.is-selected .voice-nav-core { box-shadow: 0 0 0 3px var(--canvas), 0 0 0 5px var(--primary), var(--shadow-float); }
 .voice-theme-logo { grid-area: 1 / 1; width: 48px; height: 48px; object-fit: contain; pointer-events: none; }
 .voice-theme-logo-dark { display: none; }
@@ -563,9 +564,8 @@ body:not(.ambient-on) .hero-card::after, body:not(.ambient-on) .ambient-field { 
 .voice-header .icon-button { background: transparent; border: 0; box-shadow: none; color: rgba(10,10,10,.5); }
 .voice-header .icon-button:active { transform: scale(.9); }
 
-/* --- Profiel-icoon: alleen bovenaan zichtbaar, fadet weg bij scrollen --- */
-.topbar-avatar { transition: opacity .2s ease, transform .2s ease; }
-.topbar-avatar.scrolled { opacity: 0; transform: translateY(-8px); pointer-events: none; }
+/* --- Profiel-icoon: scrollt mee met de inhoud (uit beeld bovenaan) --- */
+.topbar-avatar { will-change: transform; }
 
 /* --- Opstartscherm (splash) --- */
 .splash { position: fixed; inset: 0; z-index: 2000; display: flex; flex-direction: column;
@@ -583,3 +583,25 @@ body:not(.ambient-on) .hero-card::after, body:not(.ambient-on) .ambient-field { 
 .detail-header h1 { margin: 0; font-size: clamp(30px, 8vw, 40px); font-weight: 650; letter-spacing: -.045em; line-height: 1; font-family: var(--font-display); }
 .back-btn { display: grid; place-items: center; width: 44px; height: 44px; min-width: 44px; flex: none; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); box-shadow: var(--shadow-card); color: var(--text); }
 [data-settings-panel] { animation: screen-crossfade .26s var(--ease) both; }
+
+/* --- Profielfoto bijsnijden (zoom + pan) --- */
+.crop-overlay { position: fixed; inset: 0; z-index: 1500; display: flex; align-items: center;
+  justify-content: center; padding: 24px; background: color-mix(in srgb, #09332C 72%, transparent);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+.crop-panel { width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 15px;
+  padding: 22px; border-radius: var(--radius-l); background: var(--surface); border: 1px solid var(--line);
+  box-shadow: var(--shadow-float); }
+.crop-panel h2 { margin: 0; font-size: 21px; }
+.crop-hint { margin: -6px 0 0; font-size: 14px; color: var(--text-soft); }
+.crop-stage { position: relative; width: 100%; aspect-ratio: 1; overflow: hidden; border-radius: 18px;
+  background: #06231e; touch-action: none; cursor: grab; }
+.crop-stage:active { cursor: grabbing; }
+.crop-stage img { position: absolute; top: 0; left: 0; transform-origin: 0 0; -webkit-user-drag: none;
+  user-select: none; pointer-events: none; max-width: none; }
+.crop-mask { position: absolute; inset: 0; pointer-events: none; }
+.crop-mask::before { content: ""; position: absolute; inset: 7%; border-radius: 50%;
+  box-shadow: 0 0 0 2000px color-mix(in srgb, #06231e 55%, transparent); border: 2px solid rgba(255,255,255,.55); }
+.crop-zoomrow { display: flex; align-items: center; gap: 12px; color: var(--text-soft); }
+.crop-zoom { flex: 1; accent-color: var(--primary); }
+.crop-actions { display: flex; gap: 10px; }
+.crop-actions button { flex: 1; }

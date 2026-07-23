@@ -1030,18 +1030,77 @@
     reader.readAsDataURL(file);
   });
   qsa('[data-avatar-pick]').forEach((b) => b.addEventListener('click', () => qs('[data-avatar-file]')?.click()));
-  qs('[data-avatar-file]')?.addEventListener('change', async (event) => {
+  qs('[data-avatar-file]')?.addEventListener('change', (event) => {
     const file = event.target.files && event.target.files[0];
-    if (!file) return;
+    if (file) openCrop(file);
+    event.target.value = '';
+  });
+
+  // --- Profielfoto bijsnijden (zoom + pan) ---
+  const crop = { img: null, natW: 0, natH: 0, base: 1, zoom: 1, tx: 0, ty: 0, S: 300 };
+  const cropStage = qs('[data-crop-stage]');
+  const cropImgEl = qs('[data-crop-img]');
+  const cropZoomEl = qs('[data-crop-zoom]');
+  const cropOverlay = qs('[data-crop-overlay]');
+  const cropDisp = () => crop.base * crop.zoom;
+  const cropRender = () => {
+    const w = crop.natW * cropDisp(); const h = crop.natH * cropDisp();
+    crop.tx = Math.min(0, Math.max(crop.S - w, crop.tx));
+    crop.ty = Math.min(0, Math.max(crop.S - h, crop.ty));
+    if (cropImgEl) cropImgEl.style.transform = `translate(${crop.tx}px, ${crop.ty}px) scale(${cropDisp()})`;
+  };
+  const openCrop = (file) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        crop.img = img; crop.natW = img.naturalWidth; crop.natH = img.naturalHeight;
+        if (cropOverlay) cropOverlay.hidden = false;
+        crop.S = (cropStage && cropStage.clientWidth) || 300;
+        crop.base = Math.max(crop.S / crop.natW, crop.S / crop.natH);
+        crop.zoom = 1; if (cropZoomEl) cropZoomEl.value = '1';
+        crop.tx = (crop.S - crop.natW * cropDisp()) / 2;
+        crop.ty = (crop.S - crop.natH * cropDisp()) / 2;
+        if (cropImgEl) cropImgEl.src = img.src;
+        cropRender();
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  };
+  cropZoomEl?.addEventListener('input', () => {
+    const old = cropDisp();
+    const cx = (crop.S / 2 - crop.tx) / old; const cy = (crop.S / 2 - crop.ty) / old;
+    crop.zoom = parseFloat(cropZoomEl.value) || 1;
+    const nw = cropDisp();
+    crop.tx = crop.S / 2 - cx * nw; crop.ty = crop.S / 2 - cy * nw;
+    cropRender();
+  });
+  let cropDrag = null;
+  cropStage?.addEventListener('pointerdown', (e) => { cropDrag = { x: e.clientX, y: e.clientY }; try { cropStage.setPointerCapture(e.pointerId); } catch (er) {} });
+  cropStage?.addEventListener('pointermove', (e) => {
+    if (!cropDrag) return;
+    crop.tx += e.clientX - cropDrag.x; crop.ty += e.clientY - cropDrag.y;
+    cropDrag = { x: e.clientX, y: e.clientY }; cropRender();
+  });
+  const cropEnd = () => { cropDrag = null; };
+  cropStage?.addEventListener('pointerup', cropEnd);
+  cropStage?.addEventListener('pointercancel', cropEnd);
+  qs('[data-crop-cancel]')?.addEventListener('click', () => { if (cropOverlay) cropOverlay.hidden = true; });
+  qs('[data-crop-apply]')?.addEventListener('click', async () => {
+    const disp = cropDisp();
+    const srcS = crop.S / disp;
+    const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 256;
+    canvas.getContext('2d').drawImage(crop.img, -crop.tx / disp, -crop.ty / disp, srcS, srcS, 0, 0, 256, 256);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    if (cropOverlay) cropOverlay.hidden = true;
     try {
-      const dataUrl = await fileToAvatar(file);
       const r = await api('/api/profile', { method: 'POST', body: JSON.stringify({ avatar: dataUrl }) });
       if (!r.ok) throw new Error('avatar');
       if (currentUser) currentUser.avatar = dataUrl;
       applyAvatar();
       showToast('Profielfoto bijgewerkt.');
     } catch (e) { showToast('Kon de foto niet instellen.'); }
-    event.target.value = '';
   });
   qs('[data-avatar-remove]')?.addEventListener('click', async () => {
     try { await api('/api/profile', { method: 'POST', body: JSON.stringify({ avatar: null }) }); } catch (e) {}
@@ -1070,7 +1129,7 @@
   window.setInterval(updateClock, 20000);
   appMain?.addEventListener('scroll', () => {
     const av = qs('[data-topbar-avatar]');
-    if (av) av.classList.toggle('scrolled', appMain.scrollTop > 40);
+    if (av) av.style.transform = `translateY(${-appMain.scrollTop}px)`;
   }, { passive: true });
 
   qs('[data-connect-google]')?.addEventListener('click', connectGoogle);

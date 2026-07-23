@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Changa:wght@200..800&amp;family=Elms+Sans:ital,wght@0,100..900;1,100..900&amp;family=Geist:wght@100..900&amp;family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="app.css?v=13">
+  <link rel="stylesheet" href="app.css?v=14">
 </head>
 <body>
   <a class="skip-link" href="#app-main">Ga naar inhoud</a>
@@ -319,7 +319,20 @@
     </form>
   </div>
 
+  <div class="crop-overlay" data-crop-overlay hidden>
+    <div class="crop-panel">
+      <h2>Profielfoto bijsnijden</h2>
+      <p class="crop-hint">Sleep om te verschuiven, gebruik de schuif om in te zoomen.</p>
+      <div class="crop-stage" data-crop-stage><img data-crop-img alt=""><div class="crop-mask" aria-hidden="true"></div></div>
+      <label class="crop-zoomrow"><svg viewBox="0 0 24 24" aria-hidden="true" width="20" height="20"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M11 8v6M8 11h6"/></svg><input class="crop-zoom" type="range" min="1" max="3" step="0.01" value="1" data-crop-zoom aria-label="Inzoomen"></label>
+      <div class="crop-actions">
+        <button class="quiet-button" type="button" data-crop-cancel>Annuleren</button>
+        <button class="primary-button" type="button" data-crop-apply><span>Toepassen</span></button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" role="status" aria-live="polite" data-toast hidden><span data-toast-text></span><button type="button" data-toast-action hidden>Ongedaan maken</button></div>
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=14"></script>
 </body>
 </html>
