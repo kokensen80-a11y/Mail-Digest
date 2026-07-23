@@ -239,6 +239,30 @@
     renderTasks();
   };
 
+  // --- Diensten / Google-koppeling --------------------------------------------
+  const connectGoogle = async () => {
+    try {
+      const d = await (await api('/oauth/start')).json();
+      if (d && d.url) { window.location.href = d.url; return; }
+    } catch (e) {}
+    showToast('Koppelen lukte niet. Probeer het zo nog eens.');
+  };
+  const loadIntegrations = async () => {
+    let d = {};
+    try { d = await (await api('/api/integrations')).json(); } catch (e) {}
+    const connectRow = qs('[data-connect-google]');
+    if (connectRow) connectRow.hidden = !!d.google;
+    qsa('[data-svc]').forEach((row) => {
+      const on = row.dataset.svc === 'openai' ? !!d.openai : !!d.google;
+      const label = qs('[data-svc-label]', row);
+      if (label) {
+        label.textContent = on ? 'Actief' : 'Niet gekoppeld';
+        label.classList.toggle('active-label', on);
+        label.classList.toggle('setting-value', !on);
+      }
+    });
+  };
+
   // --- Planning: echte agenda-tijdlijn + week-strip ---------------------------
   const WD_SHORT = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
   const dateKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -361,6 +385,7 @@
       });
       activeScreen = target;
       if (target === 'planning') { loadPlanning(); loadTasks(); }
+      if (target === 'more') loadIntegrations();
       appView.classList.toggle('voice-active', target === 'voice');
       const navOrder = ['home', 'planning', 'voice', 'mail', 'more'];
       root.style.setProperty('--nav-index', String(navOrder.indexOf(target)));
@@ -723,6 +748,7 @@
   }));
 
   qsa('[data-toast-message]').forEach((button) => button.addEventListener('click', () => showToast(button.dataset.toastMessage)));
+  qs('[data-connect-google]')?.addEventListener('click', connectGoogle);
   qs('[data-log-out]')?.addEventListener('click', async () => {
     try { await api('/api/logout', { method: 'POST' }); } catch (e) {}
     currentUser = null;
