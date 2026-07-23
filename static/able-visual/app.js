@@ -53,9 +53,128 @@
     headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
   }, opts));
   let currentUser = null;
-  const MONTHS_NL = ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli',
-    'augustus', 'september', 'oktober', 'november', 'december'];
-  const DAYS_NL = ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag'];
+
+  // --- Taal (app-UI in nl/en) -------------------------------------------------
+  const STR = {
+    login_kicker: ['Welkom terug', 'Welcome back'],
+    login_title: ['Je dag staat rustig voor je klaar.', 'Your day is calmly ready for you.'],
+    login_sub: ['Able brengt je afspraken, taken en berichten samen zonder extra ruis.', 'Able brings your appointments, tasks and messages together without extra noise.'],
+    login_name: ['Naam', 'Name'],
+    login_pw: ['Wachtwoord', 'Password'],
+    login_name_ph: ['Je naam', 'Your name'],
+    login_pw_ph: ['Wachtwoord', 'Password'],
+    login_go: ['Ga naar Able', 'Go to Able'],
+    theme_light: ['Bekijk Able Light', 'View Able Light'],
+    theme_forest: ['Bekijk Able Forest', 'View Able Forest'],
+    home_first: ['Als eerste', 'Up first'],
+    home_appts: ['Afspraken', 'Appointments'],
+    home_tasks: ['Taken', 'Tasks'],
+    home_waiting: ['Wachten', 'Waiting'],
+    home_suggest: ['Able stelt voor', 'Able suggests'],
+    home_recent: ['Recente chats', 'Recent chats'],
+    planning: ['Planning', 'Planning'],
+    tab_agenda: ['Agenda', 'Calendar'],
+    tab_tasks: ['Taken', 'Tasks'],
+    now: ['Nu', 'Now'],
+    new_task_ph: ['Nieuwe taak…', 'New task…'],
+    nothing_planned: ['Niets gepland.', 'Nothing planned.'],
+    quiet_day: ['Een rustige dag.', 'A quiet day.'],
+    tasks_empty_title: ['Niets op je lijst.', 'Nothing on your list.'],
+    tasks_empty_sub: ['Lekker rustig.', 'Nice and calm.'],
+    voice_idle: ['Klaar wanneer jij dat bent.', 'Ready when you are.'],
+    voice_listening: ['Ik luister…', 'Listening…'],
+    voice_thinking: ['Momentje…', 'One moment…'],
+    voice_talk: ['Praat', 'Talk'],
+    voice_stop: ['Stop', 'Stop'],
+    voice_interrupt: ['Onderbreek', 'Interrupt'],
+    voice_denies: ['Ik kan nu niet praten', 'I can’t talk right now'],
+    voice_title: ['Praat met Able', 'Talk to Able'],
+    mail: ['Mail', 'Mail'],
+    mail_soon_title: ['Mail-lezen komt eraan.', 'Mail reading is coming soon.'],
+    mail_soon_sub: ['Voor dit account is nog geen mailbox om te lezen gekoppeld.', 'No mailbox is connected for reading on this account yet.'],
+    inbox_quiet_title: ['Inbox is rustig.', 'Inbox is quiet.'],
+    inbox_quiet_sub: ['Geen recente mail.', 'No recent mail.'],
+    settings: ['Instellingen', 'Settings'],
+    set_adjust: ['Aanpassen', 'Customize'],
+    set_adjust_sub: ['Thema, glow, tekstgrootte', 'Theme, glow, text size'],
+    set_langvoice: ['Taal & spraak', 'Language & voice'],
+    set_langvoice_sub: ['Taal, stem, budget', 'Language, voice, budget'],
+    set_services: ['Diensten', 'Services'],
+    set_services_sub: ['Google, mail, OpenAI', 'Google, mail, OpenAI'],
+    set_users: ['Gebruikers', 'Users'],
+    set_users_sub: ['Personen beheren', 'Manage people'],
+    set_privacy: ['Privacy', 'Privacy'],
+    set_privacy_sub: ['Voorwaarden & beleid', 'Terms & policy'],
+    logout: ['Log uit', 'Log out'],
+    theme: ['Thema', 'Theme'],
+    ambient: ['Ambient glow', 'Ambient glow'],
+    textsize: ['Tekstgrootte', 'Text size'],
+    size_normal: ['Normaal', 'Normal'],
+    size_large: ['Groot', 'Large'],
+    size_xl: ['Extra', 'Extra'],
+    language: ['Taal', 'Language'],
+    voice_of_able: ['Stem van Able', 'Able’s voice'],
+    female: ['Vrouw', 'Female'],
+    male: ['Man', 'Male'],
+    budget_left: ['Resterend spraakbudget deze maand', 'Voice budget left this month'],
+    connect_google: ['Koppel Google', 'Connect Google'],
+    connect_google_sub: ['Voor mail en agenda', 'For mail and calendar'],
+    connect: ['Koppelen', 'Connect'],
+    profile: ['Profiel', 'Profile'],
+    pick_photo: ['Foto kiezen uit galerij', 'Choose photo from gallery'],
+    remove_photo: ['Foto verwijderen', 'Remove photo'],
+    name: ['Naam', 'Name'],
+    save_name: ['Naam opslaan', 'Save name'],
+    terms: ['Algemene voorwaarden', 'Terms of service'],
+    privacy_policy: ['Privacybeleid', 'Privacy policy'],
+    data_security: ['Gegevens & beveiliging', 'Data & security'],
+    add_person: ['Persoon toevoegen', 'Add person'],
+    add_name_ph: ['Naam (bijv. Papa)', 'Name (e.g. Dad)'],
+    add_user_ph: ['Gebruikersnaam', 'Username'],
+    add_pw_ph: ['Wachtwoord (min. 4)', 'Password (min. 4)'],
+    chat_help: ['Waar kan ik je mee helpen?', 'What can I help you with?'],
+    chat_context: ['Je dag is al in context.', 'Your day is already in context.'],
+    chat_msg_ph: ['Bericht aan Able…', 'Message Able…'],
+    active: ['Actief', 'Active'],
+    off: ['Uit', 'Off'],
+    admin: ['Beheerder', 'Admin'],
+    linked_google: ['Google gekoppeld', 'Google linked'],
+    no_google: ['Nog geen Google', 'No Google yet'],
+    back: ['Terug', 'Back'],
+    no_appts: ['Geen afspraken', 'No appointments'],
+    agenda_quiet: ['Je agenda is rustig', 'Your calendar is clear'],
+    messages: ['berichten', 'messages'],
+    start_convo: ['Begin een gesprek', 'Start a conversation'],
+    able_knows: ['Able kent je dag al', 'Able already knows your day'],
+    speech_chat: ['Spraak & chat', 'Speech & chat'],
+    left_over: ['over', 'left'],
+    in_min: ['over %d min', 'in %d min'],
+    in_hour: ['over %d uur', 'in %d h'],
+    tomorrow: ['morgen', 'tomorrow'],
+    in_days: ['over %d dagen', 'in %d days'],
+    today_word: ['vandaag', 'today'],
+    yesterday: ['gisteren', 'yesterday'],
+    days_word: ['dagen', 'days'],
+  };
+  let LANG = (localStorage.getItem('able_lang') === 'en') ? 'en' : 'nl';
+  const t = (key) => { const e = STR[key]; return e ? (LANG === 'en' ? e[1] : e[0]) : key; };
+  const applyLang = (lang) => {
+    LANG = lang === 'en' ? 'en' : 'nl';
+    try { localStorage.setItem('able_lang', LANG); } catch (e) {}
+    document.documentElement.lang = LANG;
+    qsa('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
+    qsa('[data-i18n-ph]').forEach((el) => { el.setAttribute('placeholder', t(el.dataset.i18nPh)); });
+  };
+  const MONTHS = {
+    nl: ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september', 'oktober', 'november', 'december'],
+    en: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+  };
+  const DAYS = {
+    nl: ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag'],
+    en: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+  };
+  const MONTHS_NL = MONTHS.nl;
+  const DAYS_NL = DAYS.nl;
   const cap = (value) => value.charAt(0).toUpperCase() + value.slice(1);
 
   const applyUser = (user) => {
@@ -63,12 +182,13 @@
     const name = (user && user.name) ? user.name : '';
     const now = new Date();
     const hour = now.getHours();
-    const greet = hour < 6 ? 'Goedenacht' : hour < 12 ? 'Goedemorgen'
-      : hour < 18 ? 'Goedemiddag' : 'Goedenavond';
+    const greet = LANG === 'en'
+      ? (hour < 6 ? 'Good night' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening')
+      : (hour < 6 ? 'Goedenacht' : hour < 12 ? 'Goedemorgen' : hour < 18 ? 'Goedemiddag' : 'Goedenavond');
     const title = qs('#home-title');
     if (title) title.textContent = name ? `${greet}, ${name}` : greet;
     const kicker = qs('#screen-home .kicker');
-    if (kicker) kicker.textContent = `${cap(DAYS_NL[now.getDay()])}, ${now.getDate()} ${MONTHS_NL[now.getMonth()]}`;
+    if (kicker) kicker.textContent = `${cap(DAYS[LANG][now.getDay()])}, ${now.getDate()} ${MONTHS[LANG][now.getMonth()]}`;
     applyAvatar();
   };
   const applyAvatar = () => {
@@ -99,11 +219,11 @@
     if (!iso) return '';
     const diffMin = Math.round((new Date(iso).getTime() - Date.now()) / 60000);
     if (diffMin < 0) return '';
-    if (diffMin < 60) return `over ${diffMin} min`;
+    if (diffMin < 60) return t('in_min').replace('%d', diffMin);
     const hrs = Math.round(diffMin / 60);
-    if (hrs < 24) return `over ${hrs} uur`;
+    if (hrs < 24) return t('in_hour').replace('%d', hrs);
     const days = Math.round(hrs / 24);
-    return days <= 1 ? 'morgen' : `over ${days} dagen`;
+    return days <= 1 ? t('tomorrow') : t('in_days').replace('%d', days);
   };
   const isSameDay = (iso) => {
     if (!iso) return false;
@@ -122,11 +242,11 @@
       setText('[data-hero-time]', next.time || '—');
       setText('[data-hero-title]', next.title || 'Afspraak');
       setText('[data-hero-sub]', next.day || '');
-      setText('[data-hero-rel]', isSameDay(next.iso) ? (relTime(next.iso) || 'vandaag') : (next.day || ''));
+      setText('[data-hero-rel]', isSameDay(next.iso) ? (relTime(next.iso) || t('today_word')) : (next.day || ''));
     } else {
       setText('[data-hero-time]', '—');
-      setText('[data-hero-title]', 'Geen afspraken');
-      setText('[data-hero-sub]', 'Je agenda is rustig');
+      setText('[data-hero-title]', t('no_appts'));
+      setText('[data-hero-sub]', t('agenda_quiet'));
       setText('[data-hero-rel]', '');
     }
     setText('[data-count-appointments]', String(agenda.filter((x) => isSameDay(x.iso)).length));
@@ -143,10 +263,10 @@
       const lastUser = [...hist].reverse().find((m) => m.role === 'user');
       if (lastUser && lastUser.content) {
         setText('[data-recent-title]', lastUser.content.slice(0, 46));
-        setText('[data-recent-sub]', `${hist.length} berichten`);
+        setText('[data-recent-sub]', `${hist.length} ${t('messages')}`);
       } else {
-        setText('[data-recent-title]', 'Begin een gesprek');
-        setText('[data-recent-sub]', 'Able kent je dag al');
+        setText('[data-recent-title]', t('start_convo'));
+        setText('[data-recent-sub]', t('able_knows'));
       }
     } catch (e) {}
   };
@@ -158,7 +278,7 @@
     qsa('meta[name="theme-color"]').forEach((meta) => meta.setAttribute('content', isForest ? '#09332C' : '#F3F3F2'));
     qsa('[data-theme-label]').forEach((label) => { label.textContent = isForest ? 'Able Forest' : 'Able Light'; });
     const loginThemeButton = qs('[data-theme-toggle]');
-    if (loginThemeButton) loginThemeButton.textContent = isForest ? 'Bekijk Able Light' : 'Bekijk Able Forest';
+    if (loginThemeButton) loginThemeButton.textContent = isForest ? t('theme_light') : t('theme_forest');
     save();
   };
 
@@ -262,7 +382,7 @@
     other: '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg>',
   };
   const svcRow = (iconHtml, name, sub, on) =>
-    `<div class="setting-row"><span class="service-mark service-logo">${iconHtml}</span><span><strong>${escapeHTML(name)}</strong>${sub ? `<small>${escapeHTML(sub)}</small>` : ''}</span><span class="${on ? 'active-label' : 'setting-value'}">${on ? 'Actief' : 'Uit'}</span></div>`;
+    `<div class="setting-row"><span class="service-mark service-logo">${iconHtml}</span><span><strong>${escapeHTML(name)}</strong>${sub ? `<small>${escapeHTML(sub)}</small>` : ''}</span><span class="${on ? 'active-label' : 'setting-value'}">${on ? t('active') : t('off')}</span></div>`;
   const loadIntegrations = async () => {
     let d = {};
     try { d = await (await api('/api/integrations')).json(); } catch (e) {}
@@ -278,7 +398,7 @@
       rows += svcRow(MAIL_ICON.gmail, 'Gmail', '', true);
     }
     if (d.google) rows += svcRow('<img src="./assets/google-calendar.svg" alt="" width="25" height="25">', 'Google Agenda', '', true);
-    rows += svcRow('<img src="./assets/openai.svg" alt="" width="25" height="25">', 'OpenAI', 'Spraak & chat', !!d.openai);
+    rows += svcRow('<img src="./assets/openai.svg" alt="" width="25" height="25">', 'OpenAI', t('speech_chat'), !!d.openai);
     list.innerHTML = rows;
   };
 
@@ -293,6 +413,7 @@
   // --- Taal (server-side: stuurt spraakherkenning + antwoorden) ---------------
   const applyLangUI = (lang) => {
     const l = lang === 'en' ? 'en' : 'nl';
+    applyLang(l);
     qsa('[data-lang-seg] button').forEach((b) => b.classList.toggle('on', b.dataset.lang === l));
   };
   const setLang = async (lang) => {
@@ -342,7 +463,7 @@
     const list = qs('[data-users-list]');
     if (!list) return;
     list.innerHTML = users.map((u) => {
-      const tag = u.is_admin ? 'Beheerder' : (u.has_google ? 'Google gekoppeld' : 'Nog geen Google');
+      const tag = u.is_admin ? t('admin') : (u.has_google ? t('linked_google') : t('no_google'));
       const gicon = u.has_google ? `<span class="ugoogle" title="Google gekoppeld">${GOOGLE_G}</span>` : '';
       const del = u.is_admin ? '' : `<button class="udel" data-del-user="${u.id}" aria-label="Verwijder ${escapeHTML(u.name)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg></button>`;
       return `<div class="userrow"><span class="uava">${escapeHTML((u.name || '?').slice(0, 1).toUpperCase())}</span><span><strong>${escapeHTML(u.name)}${gicon}</strong><small class="upill">@${escapeHTML(u.username)} · ${tag}</small></span>${del}</div>`;
@@ -395,8 +516,8 @@
     const d = new Date(iso); const now = new Date();
     if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
     const days = Math.round((now - d) / 86400000);
-    if (days <= 1) return 'gisteren';
-    if (days < 7) return `${days} dagen`;
+    if (days <= 1) return t('yesterday');
+    if (days < 7) return `${days} ${t('days_word')}`;
     return d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
   };
   const loadMail = async () => {
@@ -405,12 +526,12 @@
     let d = { items: [], supported: true };
     try { d = await (await api('/api/mail')).json(); } catch (e) {}
     if (!d.supported) {
-      body.innerHTML = '<div class="empty-state"><span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg></span><h2>Mail-lezen komt eraan.</h2><p>Voor dit account is nog geen mailbox om te lezen gekoppeld.</p></div>';
+      body.innerHTML = `<div class="empty-state"><span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg></span><h2>${t('mail_soon_title')}</h2><p>${t('mail_soon_sub')}</p></div>`;
       return;
     }
     const items = d.items || [];
     if (!items.length) {
-      body.innerHTML = '<div class="empty-state"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></span><h2>Inbox is rustig.</h2><p>Geen recente mail.</p></div>';
+      body.innerHTML = `<div class="empty-state"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></span><h2>${t('inbox_quiet_title')}</h2><p>${t('inbox_quiet_sub')}</p></div>`;
       return;
     }
     const av = (s) => escapeHTML(senderName(s).slice(0, 1).toUpperCase());
@@ -445,7 +566,7 @@
     if (!tl) return;
     const events = (byDay[key] || []).slice().sort((a, b) => (a.time || '').localeCompare(b.time || ''));
     if (!events.length) {
-      tl.innerHTML = '<div class="empty-state"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></span><h2>Niets gepland.</h2><p>Een rustige dag.</p></div>';
+      tl.innerHTML = `<div class="empty-state"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></span><h2>${t('nothing_planned')}</h2><p>${t('quiet_day')}</p></div>`;
       return;
     }
     const nowMs = Date.now();
@@ -882,11 +1003,11 @@
     const screen = qs('[data-screen="voice"]');
     if (screen) screen.dataset.voiceState = voiceState;
     const copy = {
-      idle: ['Klaar wanneer jij dat bent.', 'Praat'],
-      listening: ['Ik luister…', 'Stop'],
-      thinking: ['Momentje…', 'Denkt'],
-      speaking: ['', 'Onderbreek']
-    }[voiceState] || ['', 'Praat'];
+      idle: [t('voice_idle'), t('voice_talk')],
+      listening: [t('voice_listening'), t('voice_stop')],
+      thinking: [t('voice_thinking'), t('voice_stop')],
+      speaking: ['', t('voice_interrupt')]
+    }[voiceState] || ['', t('voice_talk')];
     if (statusText) statusText.textContent = statusOverride != null ? statusOverride : copy[0];
     if (controlLabel) controlLabel.textContent = copy[1];
     if (statusText) statusText.hidden = voiceState === 'speaking';
@@ -1230,6 +1351,7 @@
 
   applyTheme(state.theme);
   applyAmbient();
+  applyLang(LANG);
   renderTasks();
   if (state.focusProtected) { const focusBlock = qs('[data-focus-block]'); if (focusBlock) focusBlock.hidden = false; }
 
