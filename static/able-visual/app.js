@@ -756,57 +756,144 @@
     voiceTimers.forEach((timer) => window.clearTimeout(timer));
     voiceTimers = [];
   };
-  const voiceAnswer = 'Morgen om tien uur heb je ruimte. Ik kan dat uur voor je voorstel beschermen.';
-  const revealVoiceAnswer = () => {
-    const spoken = qs('[data-voice-spoken]');
-    const words = voiceAnswer.split(/\s+/);
-    spoken.innerHTML = words.map((word) => `<span aria-hidden="true">${escapeHTML(word)}</span>`).join(' ');
-    spoken.setAttribute('aria-label', voiceAnswer);
-    qsa('span', spoken).forEach((word, index) => {
-      voiceTimers.push(window.setTimeout(() => word.classList.add('is-visible'), index * 185));
-    });
-  };
-  const setVoiceState = (voiceState) => {
+  // --- Voice: echte WebRTC realtime (OpenAI) ----------------------------------
+  let vpc = null, vdc = null, micStream = null, voiceOn = false, micMuted = false;
+  let ableText = '', voiceStart = 0, voiceUsage = null;
+
+  const setVoiceState = (voiceState, statusOverride) => {
     const voiceCopy = qs('[data-voice-copy]');
     const statusText = qs('[data-voice-status-text]');
     const spoken = qs('[data-voice-spoken]');
     const edge = qs('[data-voice-edge]');
     const controlLabel = qs('[data-voice-control] span');
     ['idle', 'listening', 'thinking', 'speaking'].forEach((name) => {
-      voiceCopy.classList.remove(`state-${name}`);
-      edge.classList.remove(`state-${name}`);
+      if (voiceCopy) voiceCopy.classList.remove(`state-${name}`);
+      if (edge) edge.classList.remove(`state-${name}`);
     });
-    voiceCopy.classList.add(`state-${voiceState}`);
-    edge.classList.add(`state-${voiceState}`);
-    qs('[data-screen="voice"]').dataset.voiceState = voiceState;
+    if (voiceCopy) voiceCopy.classList.add(`state-${voiceState}`);
+    if (edge) edge.classList.add(`state-${voiceState}`);
+    const screen = qs('[data-screen="voice"]');
+    if (screen) screen.dataset.voiceState = voiceState;
     const copy = {
       idle: ['Klaar wanneer jij dat bent.', 'Praat'],
       listening: ['Ik luister…', 'Stop'],
-      thinking: ['Thinking…', 'Denkt'],
-      speaking: ['', 'Stop']
-    }[voiceState];
-    [statusText.textContent, controlLabel.textContent] = copy;
-    statusText.hidden = voiceState === 'speaking';
-    spoken.hidden = voiceState !== 'speaking';
-    spoken.innerHTML = '';
-    spoken.removeAttribute('aria-label');
-    if (voiceState === 'speaking') revealVoiceAnswer();
+      thinking: ['Momentje…', 'Denkt'],
+      speaking: ['', 'Onderbreek']
+    }[voiceState] || ['', 'Praat'];
+    if (statusText) statusText.textContent = statusOverride != null ? statusOverride : copy[0];
+    if (controlLabel) controlLabel.textContent = copy[1];
+    if (statusText) statusText.hidden = voiceState === 'speaking';
+    if (spoken) {
+      spoken.hidden = voiceState !== 'speaking';
+      if (voiceState !== 'speaking') { spoken.textContent = ''; ableText = ''; }
+    }
   };
-  const startVoiceSequence = () => {
-    clearVoiceTimers();
-    setVoiceState('listening');
-    voiceTimers.push(window.setTimeout(() => setVoiceState('thinking'), 2400));
-    voiceTimers.push(window.setTimeout(() => setVoiceState('speaking'), 4200));
-    voiceTimers.push(window.setTimeout(() => setVoiceState('idle'), 7200));
+  const setSpoken = (text) => {
+    const spoken = qs('[data-voice-spoken]');
+    if (spoken) { spoken.textContent = text; spoken.scrollTop = spoken.scrollHeight; }
+  };
+  const remoteAudio = () => {
+    let a = document.getElementById('able-remote-audio');
+    if (!a) {
+      a = document.createElement('audio');
+      a.id = 'able-remote-audio';
+      a.autoplay = true; a.setAttribute('playsinline', '');
+      document.body.appendChild(a);
+    }
+    return a;
+  };
+  const setMicOn = (on) => { try { if (micStream) micStream.getAudioTracks()[0].enabled = on; } catch (e) {} };
+  const sendVoiceEvt = (o) => { try { if (vdc && vdc.readyState === 'open') vdc.send(JSON.stringify(o)); } catch (e) {} };
+  const reportVoiceSeconds = () => {
+    if (!voiceStart) return;
+    const secs = Math.round((Date.now() - voiceStart) / 1000);
+    voiceStart = 0;
+    if (secs <= 0) return;
+    api('/api/voice-usage', { method: 'POST', body: JSON.stringify({ seconds: secs }) })
+      .then((r) => r.json()).then((d) => { voiceUsage = d; }).catch(() => {});
+  };
+  const runVoiceTool = (name, callId, argsStr) => {
+    api('/api/tool', { method: 'POST', body: JSON.stringify({ name, arguments: argsStr }) })
+      .then((r) => r.json())
+      .then((d) => {
+        sendVoiceEvt({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: callId, output: (d && d.output) || 'ok' } });
+        sendVoiceEvt({ type: 'response.create' });
+      }).catch(() => {
+        sendVoiceEvt({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: callId, output: 'Fout bij uitvoeren.' } });
+        sendVoiceEvt({ type: 'response.create' });
+      });
+  };
+  const onVoiceEvt = (ev) => {
+    let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+    const et = m.type || '';
+    if (et.indexOf('speech_started') >= 0) { ableText = ''; setVoiceState('listening'); }
+    else if (et.indexOf('speech_stopped') >= 0) setVoiceState('thinking');
+    else if (et === 'output_audio_buffer.started') { setMicOn(false); setVoiceState('speaking'); }
+    else if (et === 'output_audio_buffer.stopped' || et === 'output_audio_buffer.cleared') {
+      window.setTimeout(() => setMicOn(!micMuted), 300);
+      setVoiceState('listening');
+    } else if (et.indexOf('audio_transcript.delta') >= 0) {
+      setVoiceState('speaking');
+      ableText += (m.delta || '');
+      setSpoken(ableText);
+    } else if (et === 'response.done') {
+      const out = (m.response && m.response.output) || [];
+      out.forEach((item) => { if (item.type === 'function_call') runVoiceTool(item.name, item.call_id, item.arguments); });
+    }
+  };
+  const startVoiceSequence = async () => {
+    if (voiceOn || vpc) return;
+    setVoiceState('idle', 'Even klaarzetten…');
+    try {
+      voiceUsage = await (await api('/api/voice-usage')).json();
+      if (voiceUsage && (voiceUsage.remaining_cents || 0) <= 0) { setVoiceState('idle', 'Je spraakbudget voor deze maand is op.'); return; }
+    } catch (e) {}
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    } catch (e) { setVoiceState('idle', 'Geen toegang tot de microfoon.'); return; }
+    let sres;
+    try { sres = await api('/api/realtime-session', { method: 'POST' }); }
+    catch (e) { setVoiceState('idle', 'Kon de spraakverbinding niet starten.'); return; }
+    if (!sres.ok) { setVoiceState('idle', sres.status === 402 ? 'Je spraakbudget is op.' : 'Starten lukte niet.'); return; }
+    const data = await sres.json();
+    const eph = data.value;
+    if (!eph) { setVoiceState('idle', 'Spraak is nog niet ingesteld op de server.'); return; }
+    try {
+      const audio = remoteAudio();
+      vpc = new RTCPeerConnection();
+      vpc.ontrack = (e) => { audio.srcObject = e.streams[0]; if (audio.play) audio.play().catch(() => {}); };
+      vpc.addTrack(micStream.getTracks()[0], micStream);
+      vdc = vpc.createDataChannel('oai-events');
+      vdc.onmessage = onVoiceEvt;
+      vdc.onopen = () => { voiceOn = true; voiceStart = Date.now(); setVoiceState('listening'); };
+      const offer = await vpc.createOffer();
+      await vpc.setLocalDescription(offer);
+      const sdpRes = await fetch('https://api.openai.com/v1/realtime/calls?model=' + encodeURIComponent(data.model), {
+        method: 'POST', body: offer.sdp, headers: { Authorization: 'Bearer ' + eph, 'Content-Type': 'application/sdp' } });
+      if (!sdpRes.ok) { setVoiceState('idle', 'Verbinding geweigerd.'); return; }
+      await vpc.setRemoteDescription({ type: 'answer', sdp: await sdpRes.text() });
+    } catch (e) { setVoiceState('idle', 'Verbinding mislukt.'); }
   };
   const stopVoice = () => {
-    clearVoiceTimers();
+    reportVoiceSeconds();
+    voiceOn = false; micMuted = false;
+    try { if (vdc) vdc.close(); } catch (e) {}
+    try { if (vpc) vpc.close(); } catch (e) {}
+    try { if (micStream) micStream.getTracks().forEach((t) => t.stop()); } catch (e) {}
+    vpc = null; vdc = null; micStream = null; ableText = '';
     setVoiceState('idle');
   };
   qsa('[data-voice-control]').forEach((button) => button.addEventListener('click', () => {
-    const voiceScreen = qs('[data-screen="voice"]');
-    if (voiceScreen.dataset.voiceState === 'idle') startVoiceSequence();
-    else stopVoice();
+    if (!voiceOn) { startVoiceSequence(); return; }
+    const st = qs('[data-screen="voice"]').dataset.voiceState;
+    if (st === 'speaking') {
+      sendVoiceEvt({ type: 'response.cancel' });
+      sendVoiceEvt({ type: 'output_audio_buffer.clear' });
+      setMicOn(!micMuted);
+      setVoiceState('listening');
+      return;
+    }
+    stopVoice();
   }));
   qsa('[data-stop-voice]').forEach((button) => button.addEventListener('click', () => {
     stopVoice();
