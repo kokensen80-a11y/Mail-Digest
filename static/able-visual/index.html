@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="nl" data-theme="forest">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#09332C">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Able">
+  <meta name="description" content="Able — je persoonlijke assistent, rustig aanwezig.">
+  <title>Able — Visual Prototype</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Changa:wght@200..800&amp;family=Elms+Sans:ital,wght@0,100..900;1,100..900&amp;family=Geist:wght@100..900&amp;family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="app.css?v=2">
+</head>
+<body>
+  <a class="skip-link" href="#app-main">Ga naar inhoud</a>
+
+  <div class="device-shell">
+    <div class="theme-background forest-background" aria-hidden="true">
+      <i class="forest-blob victoria"></i>
+      <i class="forest-blob spring"></i>
+      <i class="forest-blob bee-yellow"></i>
+      <i class="forest-blob fence"></i>
+    </div>
+    <section class="login-view" data-login-view aria-labelledby="login-title">
+      <div class="ambient-field" aria-hidden="true"></div>
+      <div class="login-brand">
+        <span class="able-mark able-mark-large" aria-hidden="true"><i></i></span>
+        <span class="wordmark">able</span>
+      </div>
+      <div class="login-copy">
+        <p class="kicker">Welkom terug</p>
+        <h1 id="login-title">Je dag staat rustig voor je klaar.</h1>
+        <p>Able brengt je afspraken, taken en berichten samen zonder extra ruis.</p>
+      </div>
+      <form class="login-form" data-login-form>
+        <label><span>Naam</span><input type="text" value="" autocomplete="username" placeholder="Je naam" required></label>
+        <label><span>Wachtwoord</span><input type="password" value="" autocomplete="current-password" placeholder="Wachtwoord" required></label>
+        <button class="primary-button" type="submit"><span>Ga naar Able</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+      </form>
+      <button class="quiet-button login-theme-button" type="button" data-theme-toggle>Bekijk Able Light</button>
+    </section>
+
+    <div class="app-view" data-app-view hidden>
+      <div class="pull-indicator" data-pull-indicator aria-hidden="true"><span></span></div>
+      <div class="loading-overlay" data-loading-overlay hidden aria-hidden="true">
+        <div class="skeleton-stack">
+          <div class="skeleton-card"><i class="skeleton-line skeleton-heading"></i><i class="skeleton-line"></i><i class="skeleton-line skeleton-short"></i></div>
+          <div class="skeleton-card"><i class="skeleton-line skeleton-heading"></i><i class="skeleton-line"></i></div>
+          <div class="skeleton-card skeleton-row-card"><i class="skeleton-dot"></i><i class="skeleton-line"></i></div>
+        </div>
+        <span class="resolve-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg></span>
+      </div>
+      <main class="app-main" id="app-main" tabindex="-1">
+        <section class="app-screen is-active" id="screen-home" data-screen="home" aria-labelledby="home-title">
+          <div class="screen-header">
+            <p class="kicker">Donderdag, 23 juli</p>
+            <h1 id="home-title">Goedemorgen, Ko</h1>
+          </div>
+
+          <button class="hero-card press-card" type="button" data-open-event>
+            <div class="hero-card-top"><span>Als eerste</span><span>over 2 uur</span></div>
+            <div class="hero-time">14:00</div>
+            <div class="hero-event"><strong>Afspraak met Arno</strong><small>45 min · Kantoor</small></div>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+
+          <div class="metric-grid">
+            <button class="metric-card press-card" type="button" data-nav-target="planning"><strong>6</strong><span>Afspraken</span></button>
+            <button class="metric-card press-card" type="button" data-show-tasks><strong data-task-count>1</strong><span>Taken</span></button>
+            <button class="metric-card press-card" type="button" data-nav-target="mail"><strong>4</strong><span>Wachten</span></button>
+          </div>
+
+          <section class="content-section">
+            <div class="section-title section-heading-surface"><h2>Able stelt voor</h2><span class="status-pill">60 min vrij</span></div>
+            <article class="suggestion-card hover-card">
+              <div class="suggestion-rule" aria-hidden="true"></div>
+              <div><strong>Bescherm je open uur.</strong><p>Werk om 15:00 rustig aan het voorstel.</p><button class="small-button" type="button" data-protect-focus>Bescherm 15:00</button></div>
+            </article>
+          </section>
+
+          <section class="content-section">
+            <button class="section-title section-heading-surface section-heading-button press-card" type="button" data-open-chat><h2>Recente chats</h2><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+            <div class="list-card home-recent-list">
+              <button class="list-row press-card" type="button" data-open-chat><span class="list-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v12H8l-4 3V5Z"/><path d="M8 9h8M8 13h5"/></svg></span><span><strong>Planning voor een rustige week</strong><small>Gisteren · 8 berichten</small></span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+              <button class="list-row press-card" type="button" data-nav-target="mail"><span class="list-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg></span><span><strong>Maya wacht op een datum</strong><small>2 dagen · antwoord voorgesteld</small></span><span class="status-pill">Antwoord</span></button>
+            </div>
+          </section>
+        </section>
+
+        <section class="app-screen" id="screen-planning" data-screen="planning" aria-labelledby="planning-title" hidden>
+          <div class="screen-header">
+            <h1 id="planning-title">Planning</h1>
+          </div>
+          <div class="segmented-control" role="tablist" aria-label="Planningweergave" data-active-tab="agenda">
+            <span class="segment-slider" aria-hidden="true"></span>
+            <button id="planning-tab-agenda" type="button" role="tab" aria-selected="true" aria-controls="planning-panel-agenda" data-planning-tab="agenda">Agenda</button>
+            <button id="planning-tab-tasks" type="button" role="tab" aria-selected="false" aria-controls="planning-panel-tasks" data-planning-tab="tasks">Taken <span data-task-count>1</span></button>
+          </div>
+
+          <div class="planning-panel" id="planning-panel-agenda" role="tabpanel" aria-labelledby="planning-tab-agenda" data-planning-panel="agenda">
+            <section class="calendar-week-card" aria-labelledby="week-card-title">
+              <div class="calendar-week-heading">
+                <div><p class="kicker">Deze week</p><h2 id="week-card-title">21–27 juli</h2></div>
+                <button class="icon-button calendar-open-button" type="button" aria-label="Open volledige agenda" data-toast-message="De volledige agenda is klaar om te openen."><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+              </div>
+              <div class="date-strip" role="group" aria-label="Kies een dag in de week van 21 juli">
+                <span class="date-slider" aria-hidden="true"></span>
+                <button class="has-events" type="button" aria-pressed="false"><span>Ma</span><strong>21</strong><i aria-hidden="true"></i></button>
+                <button type="button" aria-pressed="false"><span>Di</span><strong>22</strong><i aria-hidden="true"></i></button>
+                <button class="is-today has-events" type="button" aria-pressed="true"><span>Wo</span><strong>23</strong><i aria-hidden="true"></i></button>
+                <button type="button" aria-pressed="false"><span>Do</span><strong>24</strong><i aria-hidden="true"></i></button>
+                <button class="has-events" type="button" aria-pressed="false"><span>Vr</span><strong>25</strong><i aria-hidden="true"></i></button>
+                <button type="button" aria-pressed="false"><span>Za</span><strong>26</strong><i aria-hidden="true"></i></button>
+                <button class="has-events" type="button" aria-pressed="false"><span>Zo</span><strong>27</strong><i aria-hidden="true"></i></button>
+              </div>
+            </section>
+            <div class="timeline">
+              <article class="timeline-item list-appear"><time>09:30</time><i></i><div><strong>Design check-in</strong><small>Studio · 30 min</small></div></article>
+              <button class="timeline-item list-appear is-next" type="button" data-open-event><time>14:00</time><i></i><div><strong>Afspraak met Arno</strong><small>Kantoor · 45 min</small></div><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+              <article class="timeline-item list-appear is-focus" data-focus-block hidden><time>15:00</time><i></i><div><strong>Beschermde focus</strong><small>Voorstel · 60 min</small></div></article>
+              <article class="timeline-item list-appear"><time>19:30</time><i></i><div><strong>Trainen</strong><small>Persoonlijk · 60 min</small></div></article>
+            </div>
+          </div>
+
+          <div class="planning-panel task-panel" id="planning-panel-tasks" role="tabpanel" aria-labelledby="planning-tab-tasks" data-planning-panel="tasks" hidden>
+            <form class="task-form" data-task-form>
+              <label><span class="sr-only">Nieuwe taak</span><input type="text" placeholder="Nieuwe taak…" required></label>
+              <button class="round-action" type="submit" aria-label="Voeg taak toe"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+            </form>
+            <div class="task-list" data-task-list></div>
+            <div class="empty-state" data-task-empty hidden><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></span><h2>Niets op je lijst.</h2><p>Lekker rustig.</p></div>
+          </div>
+        </section>
+
+        <section class="app-screen voice-screen" id="screen-voice" data-screen="voice" aria-labelledby="voice-title" hidden>
+          <div class="voice-header">
+            <div><h1 id="voice-title" data-voice-title>Klaar wanneer jij dat bent.</h1></div>
+            <button class="icon-button" type="button" aria-label="Stop voice" data-stop-voice><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+          </div>
+          <div class="voice-stage">
+            <button class="voice-sphere state-idle" type="button" aria-label="Start luisteren" data-voice-sphere><span class="sphere-core"></span><span class="sphere-ring"></span><span class="sphere-sweep"></span></button>
+            <p class="voice-state-label" data-voice-label>Raak de sphere aan om te praten</p>
+            <button class="cant-talk-button quiet-button" type="button" data-open-chat><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v12H8l-4 3V5Z"/></svg><span>Ik kan nu niet praten</span></button>
+          </div>
+          <div class="voice-transcript" data-voice-transcript aria-live="polite"></div>
+          <div class="voice-controls">
+            <button class="secondary-circle" type="button" data-open-chat aria-label="Open tekstchat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v12H8l-4 3V5Z"/></svg></button>
+            <button class="voice-main-button" type="button" data-voice-sphere-control><svg class="rounded-mic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5a3.5 3.5 0 0 0-3.5 3.5v5a3.5 3.5 0 0 0 7 0V7A3.5 3.5 0 0 0 12 3.5Z"/><path d="M5.5 11.5v1a6.5 6.5 0 0 0 13 0v-1M12 19v2"/></svg><span>Praat</span></button>
+            <button class="secondary-circle" type="button" data-stop-voice aria-label="Annuleer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+          </div>
+        </section>
+
+        <section class="app-screen" id="screen-mail" data-screen="mail" aria-labelledby="mail-title" hidden>
+          <div class="screen-header">
+            <h1 id="mail-title">Mail</h1>
+          </div>
+          <article class="mail-priority-card hover-card">
+            <div class="mail-priority-top"><span class="avatar">M</span><span><strong>Maya Koster</strong><small>2 dagen geleden</small></span><span class="status-pill">Prioriteit</span></div>
+            <h2>Kunnen we een datum voor augustus vastleggen?</h2>
+            <button class="primary-button" type="button" data-open-mail="maya"><span>Antwoord bekijken</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+          </article>
+          <div class="list-card mail-list">
+            <button class="list-row press-card list-appear" type="button" data-open-mail="teun"><span class="avatar">T</span><span><strong>Teun Kensen</strong><small>Fifa · 1 dag</small></span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+            <button class="list-row press-card list-appear" type="button" data-open-mail="peer"><span class="avatar">P</span><span><strong>Peer Noordermeer</strong><small>Slaap lekker · 1 dag</small></span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+            <button class="list-row press-card list-appear" type="button" data-open-mail="arno"><span class="avatar">A</span><span><strong>Arno Kensen</strong><small>De nieuwe versie werkt heel goed · vandaag</small></span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+          </div>
+        </section>
+
+        <section class="app-screen" id="screen-more" data-screen="more" aria-labelledby="more-title" hidden>
+          <div class="screen-header">
+            <h1 id="more-title">Instellingen</h1>
+          </div>
+
+          <section class="settings-group">
+            <h2>Vormgeving</h2>
+            <div class="settings-card">
+              <button class="setting-row list-appear" type="button" data-setting-theme><span class="setting-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9c0-1.1-.9-2-2-2h-1a2 2 0 0 1-1.7-3l.5-.9A2 2 0 0 0 15 3.2 9 9 0 0 0 12 3Z"/></svg></span><span><strong>Thema</strong><small data-theme-label>Able Forest</small></span><span class="setting-value">Wijzig</span></button>
+              <label class="setting-row list-appear"><span class="setting-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l2-6 4 12 2-6h5"/></svg></span><span><strong>Ambient glow</strong></span><span class="switch"><input type="checkbox" checked data-ambient-toggle><i aria-hidden="true"></i></span></label>
+            </div>
+          </section>
+
+          <section class="settings-group">
+            <h2>Diensten</h2>
+            <div class="settings-card">
+              <button class="setting-row list-appear" type="button" data-service="Gmail"><span class="service-mark service-logo"><img src="./assets/gmail.svg" alt="" width="28" height="21"></span><span><strong>Gmail</strong></span><span class="active-label">Actief</span></button>
+              <button class="setting-row list-appear" type="button" data-service="Google Agenda"><span class="service-mark service-logo"><img src="./assets/google-calendar.svg" alt="" width="27" height="27"></span><span><strong>Google Agenda</strong></span><span class="active-label">Actief</span></button>
+              <button class="setting-row list-appear" type="button" data-service="OpenAI"><span class="service-mark service-logo"><img src="./assets/openai.svg" alt="" width="27" height="27"></span><span><strong>OpenAI</strong></span><span class="active-label">Actief</span></button>
+            </div>
+          </section>
+
+          <section class="settings-group">
+            <h2>Account</h2>
+            <div class="settings-card">
+              <button class="setting-row list-appear" type="button" data-toast-message="Je privacy-instellingen zijn klaar om te bekijken."><span class="setting-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><span><strong>Privacy</strong></span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+              <button class="setting-row list-appear" type="button" data-log-out><span class="setting-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H5v16h5M14 8l4 4-4 4M8 12h10"/></svg></span><span><strong>Log uit</strong></span></button>
+            </div>
+          </section>
+        </section>
+      </main>
+
+      <nav class="bottom-navigation" aria-label="Hoofdnavigatie" data-bottom-nav>
+        <span class="nav-slider" aria-hidden="true"></span>
+        <button class="nav-button is-selected" type="button" aria-label="Home" aria-current="page" data-nav-target="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3.5 10 8.5-7 8.5 7v10h-6v-6h-5v6h-5z"/></svg></button>
+        <button class="nav-button" type="button" aria-label="Planning" data-nav-target="planning"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="15" rx="2"/><path d="M7.5 3v5M16.5 3v5M3.5 10h17"/></svg></button>
+        <button class="nav-button voice-nav-button" type="button" data-nav-target="voice" aria-label="Able Voice"><span class="voice-nav-core"><img class="voice-theme-logo voice-theme-logo-light" src="assets/able-logo-light-256.png" alt="" aria-hidden="true"><img class="voice-theme-logo voice-theme-logo-dark" src="assets/able-logo-dark-256.png" alt="" aria-hidden="true"></span></button>
+        <button class="nav-button" type="button" aria-label="Mail" data-nav-target="mail"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg></button>
+        <button class="nav-button" type="button" aria-label="Meer" data-nav-target="more"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.25"/><circle cx="12" cy="12" r="1.25"/><circle cx="19" cy="12" r="1.25"/></svg></button>
+      </nav>
+    </div>
+  </div>
+
+  <div class="sheet-backdrop" data-sheet-backdrop hidden>
+    <section class="bottom-sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" data-sheet>
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div data-sheet-content></div>
+      <button class="icon-button sheet-close" type="button" aria-label="Sluit" data-close-sheet><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </section>
+  </div>
+
+  <div class="chat-overlay" role="dialog" aria-modal="true" aria-label="Chat met Able" aria-hidden="true" data-chat-overlay hidden>
+    <div class="theme-background forest-background" aria-hidden="true">
+      <i class="forest-blob victoria"></i>
+      <i class="forest-blob spring"></i>
+      <i class="forest-blob bee-yellow"></i>
+      <i class="forest-blob fence"></i>
+    </div>
+    <header><button class="icon-button" type="button" aria-label="Sluit chat" data-close-chat><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button><strong>able</strong><span></span></header>
+    <div class="chat-thread" data-chat-thread>
+      <div class="chat-empty"><h2>Waar kan ik je mee helpen?</h2><p>Je dag is al in context.</p></div>
+    </div>
+    <div class="chat-suggestions" aria-label="Voorgestelde vragen">
+      <button type="button" data-chat-suggestion>Plan mijn middag</button>
+      <button type="button" data-chat-suggestion>Schrijf een follow-up</button>
+      <button type="button" data-chat-suggestion>Wat kan wachten?</button>
+    </div>
+    <form class="chat-form" data-chat-form>
+      <button class="chat-add-button" type="button" aria-label="Voeg context toe" data-toast-message="Je kunt hier straks context toevoegen."><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+      <label><span class="sr-only">Bericht aan Able</span><input type="text" placeholder="Bericht aan Able…" required></label>
+      <button class="chat-voice-button" type="button" aria-label="Praat met Able" data-chat-voice><svg class="rounded-mic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5a3.5 3.5 0 0 0-3.5 3.5v5a3.5 3.5 0 0 0 7 0V7A3.5 3.5 0 0 0 12 3.5Z"/><path d="M5.5 11.5v1a6.5 6.5 0 0 0 13 0v-1M12 19v2"/></svg></button>
+    </form>
+  </div>
+
+  <div class="toast" role="status" aria-live="polite" data-toast hidden><span data-toast-text></span><button type="button" data-toast-action hidden>Ongedaan maken</button></div>
+  <script src="app.js?v=2"></script>
+</body>
+</html>

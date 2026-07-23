@@ -1,0 +1,17 @@
+{
+  "name": "Able Visual Prototype",
+  "short_name": "Able",
+  "description": "Able — je persoonlijke assistent, rustig aanwezig.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#09332C",
+  "theme_color": "#09332C",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

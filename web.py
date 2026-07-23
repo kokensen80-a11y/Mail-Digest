@@ -20,6 +20,7 @@ import requests
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import (FileResponse, JSONResponse, Response,
                                StreamingResponse)
+from fastapi.staticfiles import StaticFiles
 
 import bot  # Able's brein (zelfde DB, tools en geheugen)
 
@@ -853,3 +854,13 @@ async def manifest():
             {"src": "/icon.png", "sizes": "1254x1254", "type": "image/png"},
         ],
     })
+
+
+# --- Beta: nieuwe UI (Codex-redesign) náást de live-app -----------------------
+# Serveert static/able-visual/ op /beta zodat we de redesign op dezelfde server
+# kunnen testen (echte /api en login-cookies) terwijl / de live-app blijft.
+app.mount(
+    "/beta",
+    StaticFiles(directory=os.path.join(HERE, "static", "able-visual"), html=True),
+    name="beta",
+)
