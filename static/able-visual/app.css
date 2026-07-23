@@ -84,7 +84,7 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
 .skip-link { position: fixed; z-index: 1000; top: 10px; left: 10px; padding: 10px 14px; border-radius: 12px; background: var(--highlight); color: #09332C; transform: translateY(-160%); transition: transform .2s; }
 .skip-link:focus { transform: translateY(0); }
 
-.device-shell { position: relative; isolation: isolate; width: min(100%, 430px); height: 100%; margin: auto; overflow: hidden; background: var(--app-background); background-size: cover; background-position: center; transition: background .45s var(--ease), color .3s var(--ease); }
+.device-shell { position: fixed; inset: 0; isolation: isolate; width: min(100%, 430px); height: auto; margin-inline: auto; overflow: hidden; background: var(--app-background); background-size: cover; background-position: center; transition: background .45s var(--ease), color .3s var(--ease); }
 .theme-background { position: absolute; z-index: 0; inset: 0; overflow: hidden; pointer-events: none; }
 .forest-background { display: block; background: #09332C; }
 :root[data-theme="light"] .forest-background { display: none; }
@@ -465,7 +465,7 @@ body:not(.ambient-on) .hero-card::after, body:not(.ambient-on) .ambient-field { 
 
 @media (min-width: 700px) {
   body { display: grid; place-items: center; padding: 30px; background: #09332C; }
-  .device-shell { width: 430px; height: min(932px, calc(100dvh - 60px)); border: 8px solid #0A0A0A; border-radius: 48px; box-shadow: 0 36px 100px rgba(10,10,10,.48); }
+  .device-shell { position: relative; inset: auto; margin: 0; width: 430px; height: min(932px, calc(100dvh - 60px)); border: 8px solid #0A0A0A; border-radius: 48px; box-shadow: 0 36px 100px rgba(10,10,10,.48); }
 }
 
 @media (max-height: 650px) and (orientation: landscape) {
