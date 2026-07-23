@@ -256,20 +256,30 @@
     } catch (e) {}
     showToast('Koppelen lukte niet. Probeer het zo nog eens.');
   };
+  const GOOGLE_G = '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/><path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24s.85 6.91 2.34 9.88l7.35-5.7z"/><path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/></svg>';
+  const MAIL_ICON = {
+    gmail: '<img src="./assets/gmail.svg" alt="" width="26" height="20">',
+    other: '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg>',
+  };
+  const svcRow = (iconHtml, name, sub, on) =>
+    `<div class="setting-row"><span class="service-mark service-logo">${iconHtml}</span><span><strong>${escapeHTML(name)}</strong>${sub ? `<small>${escapeHTML(sub)}</small>` : ''}</span><span class="${on ? 'active-label' : 'setting-value'}">${on ? 'Actief' : 'Uit'}</span></div>`;
   const loadIntegrations = async () => {
     let d = {};
     try { d = await (await api('/api/integrations')).json(); } catch (e) {}
     const connectRow = qs('[data-connect-google]');
     if (connectRow) connectRow.hidden = !!d.google;
-    qsa('[data-svc]').forEach((row) => {
-      const on = row.dataset.svc === 'openai' ? !!d.openai : !!d.google;
-      const label = qs('[data-svc-label]', row);
-      if (label) {
-        label.textContent = on ? 'Actief' : 'Niet gekoppeld';
-        label.classList.toggle('active-label', on);
-        label.classList.toggle('setting-value', !on);
-      }
-    });
+    const list = qs('[data-services-list]');
+    if (!list) return;
+    let rows = '';
+    const boxes = d.mailboxes || [];
+    if (boxes.length) {
+      boxes.forEach((b) => { rows += svcRow(MAIL_ICON[b.type] || MAIL_ICON.other, b.name || b.user, b.user, b.on !== false); });
+    } else if (d.google) {
+      rows += svcRow(MAIL_ICON.gmail, 'Gmail', '', true);
+    }
+    if (d.google) rows += svcRow('<img src="./assets/google-calendar.svg" alt="" width="25" height="25">', 'Google Agenda', '', true);
+    rows += svcRow('<img src="./assets/openai.svg" alt="" width="25" height="25">', 'OpenAI', 'Spraak & chat', !!d.openai);
+    list.innerHTML = rows;
   };
 
   // --- Tekstgrootte (client-side via zoom) ------------------------------------
@@ -304,6 +314,21 @@
     }
     const eur = (c) => '€' + ((Number(c) || 0) / 100).toFixed(2).replace('.', ',');
     setText('[data-budget-text]', `${eur(d.spent_cents)} / ${eur(d.cap_cents)}`);
+    setText('[data-budget-remain]', `nog ${eur(d.remaining_cents)} over`);
+  };
+
+  // --- Stem van Able (man/vrouw) ----------------------------------------------
+  const applyVoiceUI = (voiceId, meta) => {
+    let gender = 'v';
+    if (meta && meta.length) { const m = meta.find((x) => x.id === voiceId); if (m) gender = m.gender; }
+    else if (['cedar', 'alloy'].includes(voiceId)) gender = 'm';
+    qsa('[data-voice-seg] button').forEach((b) => b.classList.toggle('on', b.dataset.voiceGender === gender));
+  };
+  const setVoice = async (gender) => {
+    const voiceId = gender === 'm' ? 'cedar' : 'marin';
+    qsa('[data-voice-seg] button').forEach((b) => b.classList.toggle('on', b.dataset.voiceGender === gender));
+    try { await api('/api/settings', { method: 'POST', body: JSON.stringify({ voice: voiceId }) }); } catch (e) {}
+    showToast(gender === 'm' ? 'Stem ingesteld op mannelijk (Daan).' : 'Stem ingesteld op vrouwelijk (Saar).');
   };
 
   // --- Gebruikersbeheer (alleen admin) ----------------------------------------
@@ -318,8 +343,9 @@
     if (!list) return;
     list.innerHTML = users.map((u) => {
       const tag = u.is_admin ? 'Beheerder' : (u.has_google ? 'Google gekoppeld' : 'Nog geen Google');
+      const gicon = u.has_google ? `<span class="ugoogle" title="Google gekoppeld">${GOOGLE_G}</span>` : '';
       const del = u.is_admin ? '' : `<button class="udel" data-del-user="${u.id}" aria-label="Verwijder ${escapeHTML(u.name)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg></button>`;
-      return `<div class="userrow"><span class="uava">${escapeHTML((u.name || '?').slice(0, 1).toUpperCase())}</span><span><strong>${escapeHTML(u.name)}</strong><small class="upill">@${escapeHTML(u.username)} · ${tag}</small></span>${del}</div>`;
+      return `<div class="userrow"><span class="uava">${escapeHTML((u.name || '?').slice(0, 1).toUpperCase())}</span><span><strong>${escapeHTML(u.name)}${gicon}</strong><small class="upill">@${escapeHTML(u.username)} · ${tag}</small></span>${del}</div>`;
     }).join('');
     qsa('[data-del-user]', list).forEach((btn) => btn.addEventListener('click', async () => {
       const id = Number(btn.dataset.delUser);
@@ -338,7 +364,7 @@
     applyAvatar();
     const pn = qs('[data-profile-name]');
     if (pn && currentUser) pn.value = currentUser.name || '';
-    api('/api/settings').then((r) => r.json()).then((s) => applyLangUI(s.lang || 'nl')).catch(() => {});
+    api('/api/settings').then((r) => r.json()).then((s) => { applyLangUI(s.lang || 'nl'); applyVoiceUI(s.voice, s.voices_meta); }).catch(() => {});
   };
 
   // --- Mail -------------------------------------------------------------------
@@ -1026,6 +1052,38 @@
   qs('[data-connect-google]')?.addEventListener('click', connectGoogle);
   qsa('[data-text-seg] button').forEach((b) => b.addEventListener('click', () => applyTextScale(b.dataset.textSize)));
   qsa('[data-lang-seg] button').forEach((b) => b.addEventListener('click', () => setLang(b.dataset.lang)));
+  qsa('[data-voice-seg] button').forEach((b) => b.addEventListener('click', () => setVoice(b.dataset.voiceGender)));
+
+  // Privacy / voorwaarden in een bottom-sheet.
+  const PRIVACY_DOCS = {
+    voorwaarden: {
+      title: 'Algemene voorwaarden',
+      html: `<p>Laatst bijgewerkt: juli 2026. Able is een persoonlijke assistent-app die je agenda, mail en taken samenbrengt.</p>
+        <h3>1. Gebruik</h3><p>Able is bedoeld voor persoonlijk gebruik door jou en de mensen die je via je account toegang geeft. Je bent zelf verantwoordelijk voor wat je met de app doet en voor het geheimhouden van je wachtwoord.</p>
+        <h3>2. Je gegevens</h3><p>Able werkt met de gegevens die jij koppelt (zoals je agenda en mail) om je te helpen. Je koppelingen kun je op elk moment weer loskoppelen.</p>
+        <h3>3. Assistentie, geen garanties</h3><p>Able doet zijn best om je goed te helpen, maar kan fouten maken. Controleer belangrijke acties (zoals verstuurde mail of afspraken) altijd zelf.</p>
+        <h3>4. Beschikbaarheid</h3><p>We proberen de app zo betrouwbaar mogelijk te houden, maar kunnen niet garanderen dat hij altijd zonder onderbreking beschikbaar is.</p>
+        <h3>5. Wijzigingen</h3><p>Deze voorwaarden kunnen worden bijgewerkt. Bij grote wijzigingen laten we het je weten in de app.</p>`,
+    },
+    privacy: {
+      title: 'Privacybeleid',
+      html: `<p>Je privacy staat voorop. Able verzamelt niet meer dan nodig is om je te helpen.</p>
+        <h3>Wat we gebruiken</h3><ul><li>Je naam en inloggegevens (om je account te herkennen).</li><li>De diensten die je koppelt (agenda, mail) — alleen om je vragen te beantwoorden en acties uit te voeren die jij vraagt.</li><li>Je gesprekken met Able, om context te onthouden binnen jouw account.</li></ul>
+        <h3>Wat we niet doen</h3><ul><li>We verkopen je gegevens niet.</li><li>Je gegevens worden niet gedeeld met andere gebruikers — elk account is volledig gescheiden.</li><li>Able gebruikt geen camera, video of locatie.</li></ul>
+        <h3>Verwijderen</h3><p>Vraag de beheerder om je account te verwijderen; dan worden al je gegevens (gesprekken, taken, koppelingen) gewist.</p>`,
+    },
+    gegevens: {
+      title: 'Gegevens & beveiliging',
+      html: `<p>Je gegevens staan op een beveiligde server en zijn per gebruiker gescheiden.</p>
+        <h3>Koppelingen</h3><p>Google-koppelingen verlopen via Google's officiële toestemmings­flow. Able bewaart alleen een beveiligd token om namens jou te mogen werken — nooit je Google-wachtwoord.</p>
+        <h3>Spraak</h3><p>Spraak loopt rechtstreeks tussen je telefoon en de spraakdienst. Er geldt een maandbudget zodat het gebruik beheersbaar blijft.</p>
+        <h3>Toegang</h3><p>Alleen jij (en de beheerder van dit account) kunnen bij jouw gegevens. Wachtwoorden worden versleuteld opgeslagen.</p>`,
+    },
+  };
+  qsa('[data-privacy]').forEach((btn) => btn.addEventListener('click', () => {
+    const doc = PRIVACY_DOCS[btn.dataset.privacy];
+    if (doc) openSheet(`<div class="sheet-doc"><h2>${doc.title}</h2>${doc.html}</div>`);
+  }));
   applyTextScale(localStorage.getItem('able-textsize') || 'normal');
   qs('[data-user-add]')?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -1043,6 +1101,13 @@
     } catch (e) { showToast('Toevoegen lukte niet (bestaat de gebruikersnaam al?).'); }
   });
   qs('[data-log-out]')?.addEventListener('click', async () => {
+    const ok = window.confirm(
+      'Weet je zeker dat je wilt uitloggen?\n\n'
+      + 'Je wordt afgemeld op dit apparaat en moet je opnieuw aanmelden met je '
+      + 'gebruikersnaam en wachtwoord. Je gegevens — agenda, taken, gesprekken en '
+      + 'koppelingen — blijven veilig bewaard en staan er weer voor je klaar zodra je '
+      + 'opnieuw inlogt.');
+    if (!ok) return;
     try { await api('/api/logout', { method: 'POST' }); } catch (e) {}
     currentUser = null;
     state.onboarded = false;

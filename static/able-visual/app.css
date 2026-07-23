@@ -280,7 +280,7 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
 .voice-copy { display: grid; place-items: center; width: min(100%, 350px); min-height: 190px; color: #0A0A0A; }
 .voice-status-text, .voice-spoken-words { margin: 0; font-family: var(--font-display); font-size: clamp(30px, 8.5vw, 38px); font-weight: 540; line-height: 1.2; letter-spacing: -.04em; text-wrap: balance; }
 .voice-copy.state-thinking .voice-status-text { color: transparent; background: linear-gradient(105deg, #0A0A0A 30%, rgba(10,10,10,.28) 47%, #0A0A0A 64%); background-size: 220% 100%; background-clip: text; -webkit-background-clip: text; animation: voice-text-shimmer 1.45s ease-in-out infinite; }
-.voice-spoken-words { max-width: 340px; }
+.voice-spoken-words { max-width: 340px; font-size: clamp(19px, 5vw, 24px); font-weight: 500; line-height: 1.4; }
 .voice-spoken-words span { display: inline-block; margin-right: .2em; opacity: 0; transform: translateY(10px); transition: opacity .28s ease-out, transform .34s var(--ease); }
 .voice-spoken-words span.is-visible { opacity: 1; transform: translateY(0); }
 .voice-controls { display: grid; grid-template-columns: 48px 1fr 48px; align-items: center; flex: 0 0 auto; gap: 14px; margin-top: 14px; }
@@ -521,13 +521,14 @@ body:not(.ambient-on) .hero-card::after, body:not(.ambient-on) .ambient-field { 
 .useradd input { min-height: 46px; padding: 11px 14px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); color: var(--text); font-size: 16px; }
 
 /* --- Profiel: rond icoon rechtsboven + profiel-sectie in instellingen --- */
-.topbar-avatar { position: fixed; top: calc(env(safe-area-inset-top) + 14px); right: 16px; z-index: 40;
+.topbar-avatar { position: absolute; top: calc(env(safe-area-inset-top) + 16px); right: 16px; z-index: 45;
   width: 42px; height: 42px; border-radius: 50%; border: 1.5px solid var(--line-strong);
   background: var(--surface); color: var(--text); display: grid; place-items: center; overflow: hidden;
   cursor: pointer; box-shadow: var(--shadow-card); font-weight: 700; font-size: 17px; padding: 0; }
 .topbar-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .app-view.voice-active .topbar-avatar { display: none; }
-:root.inframe .topbar-avatar { top: calc(env(safe-area-inset-top) + 30px); }
+/* Tijdens praten met Able: geen navigatiebalk, alleen de spraak-bediening. */
+.app-view.voice-active .bottom-navigation { display: none; }
 
 .profile-edit { display: flex; flex-direction: column; gap: 15px; padding: 16px 14px; }
 .profile-top { display: flex; align-items: center; gap: 15px; }
@@ -543,3 +544,15 @@ body:not(.ambient-on) .hero-card::after, body:not(.ambient-on) .ambient-field { 
 .profile-name input { flex: 1; min-height: 48px; padding: 12px 14px; border: 1px solid var(--line);
   border-radius: 14px; background: var(--surface); color: var(--text); font-size: 16px; }
 .profile-name button { min-height: 48px; padding: 0 18px; width: auto; }
+
+/* --- Instellingen v2: rode uitlog-rij, Google-icoon, voorwaarden-sheet --- */
+.logout-row .setting-icon { color: #F5674A; background: color-mix(in srgb, #F5674A 16%, transparent); }
+.logout-row strong { color: #F5674A; }
+.ugoogle { display: inline-flex; align-items: center; vertical-align: -2px; margin-left: 7px; }
+.ugoogle svg { width: 15px; height: 15px; }
+.ugoogle svg path, [data-connect-google] .service-logo svg path { stroke: none; }
+.sheet-doc h2 { margin: 0 0 8px; font-size: 24px; font-weight: 620; letter-spacing: -.03em; }
+.sheet-doc h3 { margin: 15px 0 3px; font-size: 16px; font-weight: 650; }
+.sheet-doc p { margin: 4px 0; font-size: 15px; line-height: 1.5; color: var(--text-soft); }
+.sheet-doc ul { margin: 5px 0; padding-left: 20px; }
+.sheet-doc li { font-size: 15px; line-height: 1.5; color: var(--text-soft); margin: 3px 0; }

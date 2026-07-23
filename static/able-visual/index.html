@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Changa:wght@200..800&amp;family=Elms+Sans:ital,wght@0,100..900;1,100..900&amp;family=Geist:wght@100..900&amp;family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="app.css?v=10">
+  <link rel="stylesheet" href="app.css?v=11">
 </head>
 <body>
   <a class="skip-link" href="#app-main">Ga naar inhoud</a>
@@ -174,16 +174,18 @@
           </div>
 
           <section class="settings-group">
-            <h2>Vormgeving</h2>
+            <h2>Aanpassen</h2>
             <div class="settings-card">
               <button class="setting-row list-appear" type="button" data-setting-theme><span class="setting-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9c0-1.1-.9-2-2-2h-1a2 2 0 0 1-1.7-3l.5-.9A2 2 0 0 0 15 3.2 9 9 0 0 0 12 3Z"/></svg></span><span><strong>Thema</strong><small data-theme-label>Able Forest</small></span><span class="setting-value">Wijzig</span></button>
               <label class="setting-row list-appear"><span class="setting-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l2-6 4 12 2-6h5"/></svg></span><span><strong>Ambient glow</strong></span><span class="switch"><input type="checkbox" checked data-ambient-toggle><i aria-hidden="true"></i></span></label>
-            </div>
-          </section>
-
-          <section class="settings-group">
-            <h2>Profiel</h2>
-            <div class="settings-card">
+              <div class="setting-stack">
+                <strong>Tekstgrootte</strong>
+                <div class="seg" data-text-seg>
+                  <button type="button" data-text-size="normal">Normaal</button>
+                  <button type="button" data-text-size="groot">Groot</button>
+                  <button type="button" data-text-size="xl">Extra</button>
+                </div>
+              </div>
               <div class="profile-edit">
                 <div class="profile-top">
                   <button class="profile-pic" type="button" data-avatar-pick aria-label="Kies profielfoto"><img data-av-img alt="" hidden><span data-av-initial>?</span></button>
@@ -202,22 +204,26 @@
           </section>
 
           <section class="settings-group">
-            <h2>Weergave &amp; taal</h2>
+            <h2>Taal &amp; spraak</h2>
             <div class="settings-card">
-              <div class="setting-stack">
-                <strong>Tekstgrootte</strong>
-                <div class="seg" data-text-seg>
-                  <button type="button" data-text-size="normal">Normaal</button>
-                  <button type="button" data-text-size="groot">Groot</button>
-                  <button type="button" data-text-size="xl">Extra</button>
-                </div>
-              </div>
               <div class="setting-stack">
                 <strong>Taal</strong>
                 <div class="seg" data-lang-seg>
                   <button type="button" data-lang="nl">Nederlands</button>
                   <button type="button" data-lang="en">English</button>
                 </div>
+              </div>
+              <div class="setting-stack">
+                <strong>Stem van Able</strong>
+                <div class="seg" data-voice-seg>
+                  <button type="button" data-voice-gender="v">Vrouw</button>
+                  <button type="button" data-voice-gender="m">Man</button>
+                </div>
+              </div>
+              <div class="setting-stack">
+                <strong>Resterend spraakbudget deze maand</strong>
+                <div class="vbudget-track"><div class="vbudget-fill" data-budget-fill></div></div>
+                <div class="vbudget-meta"><span data-budget-text>€0,00 / €3,00</span><span data-budget-remain></span></div>
               </div>
             </div>
           </section>
@@ -226,19 +232,7 @@
             <h2>Diensten</h2>
             <div class="settings-card">
               <button class="setting-row list-appear" type="button" data-connect-google hidden><span class="service-mark service-logo"><svg viewBox="0 0 48 48" width="26" height="26" aria-hidden="true"><path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/><path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24s.85 6.91 2.34 9.88l7.35-5.7z"/><path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/></svg></span><span><strong>Koppel Google</strong><small>Voor mail en agenda</small></span><span class="setting-value">Koppelen</span></button>
-              <button class="setting-row list-appear" type="button" data-service="Gmail" data-svc="google"><span class="service-mark service-logo"><img src="./assets/gmail.svg" alt="" width="28" height="21"></span><span><strong>Gmail</strong></span><span class="active-label" data-svc-label>Actief</span></button>
-              <button class="setting-row list-appear" type="button" data-service="Google Agenda" data-svc="google"><span class="service-mark service-logo"><img src="./assets/google-calendar.svg" alt="" width="27" height="27"></span><span><strong>Google Agenda</strong></span><span class="active-label" data-svc-label>Actief</span></button>
-              <button class="setting-row list-appear" type="button" data-service="OpenAI" data-svc="openai"><span class="service-mark service-logo"><img src="./assets/openai.svg" alt="" width="27" height="27"></span><span><strong>OpenAI</strong></span><span class="active-label" data-svc-label>Actief</span></button>
-            </div>
-          </section>
-
-          <section class="settings-group">
-            <h2>Spraak</h2>
-            <div class="settings-card">
-              <div class="vbudget">
-                <div class="vbudget-meta"><span>Maandbudget spraak</span><span data-budget-text>€0,00 / €3,00</span></div>
-                <div class="vbudget-track"><div class="vbudget-fill" data-budget-fill></div></div>
-              </div>
+              <div data-services-list></div>
             </div>
           </section>
 
@@ -256,10 +250,17 @@
           </section>
 
           <section class="settings-group">
-            <h2>Account</h2>
+            <h2>Privacy</h2>
             <div class="settings-card">
-              <button class="setting-row list-appear" type="button" data-toast-message="Je privacy-instellingen zijn klaar om te bekijken."><span class="setting-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><span><strong>Privacy</strong></span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
-              <button class="setting-row list-appear" type="button" data-log-out><span class="setting-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H5v16h5M14 8l4 4-4 4M8 12h10"/></svg></span><span><strong>Log uit</strong></span></button>
+              <button class="setting-row list-appear" type="button" data-privacy="voorwaarden"><span class="setting-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M9.5 12h6M9.5 16h6"/></svg></span><span><strong>Algemene voorwaarden</strong></span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+              <button class="setting-row list-appear" type="button" data-privacy="privacy"><span class="setting-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><span><strong>Privacybeleid</strong></span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+              <button class="setting-row list-appear" type="button" data-privacy="gegevens"><span class="setting-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg></span><span><strong>Gegevens &amp; beveiliging</strong></span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+            </div>
+          </section>
+
+          <section class="settings-group">
+            <div class="settings-card">
+              <button class="setting-row list-appear logout-row" type="button" data-log-out><span class="setting-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H5v16h5M14 8l4 4-4 4M8 12h10"/></svg></span><span><strong>Log uit</strong></span></button>
             </div>
           </section>
         </section>
@@ -308,6 +309,6 @@
   </div>
 
   <div class="toast" role="status" aria-live="polite" data-toast hidden><span data-toast-text></span><button type="button" data-toast-action hidden>Ongedaan maken</button></div>
-  <script src="app.js?v=10"></script>
+  <script src="app.js?v=11"></script>
 </body>
 </html>
