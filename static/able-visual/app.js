@@ -1049,6 +1049,15 @@
   });
   qs('[data-topbar-avatar]')?.addEventListener('click', () => navigate('more'));
 
+  // Live klok (agenda-kop) + profiel-icoon dat wegfadet zodra je scrollt.
+  const updateClock = () => setText('[data-live-clock]', new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }));
+  updateClock();
+  window.setInterval(updateClock, 20000);
+  appMain?.addEventListener('scroll', () => {
+    const av = qs('[data-topbar-avatar]');
+    if (av) av.classList.toggle('scrolled', appMain.scrollTop > 40);
+  }, { passive: true });
+
   qs('[data-connect-google]')?.addEventListener('click', connectGoogle);
   qsa('[data-text-seg] button').forEach((b) => b.addEventListener('click', () => applyTextScale(b.dataset.textSize)));
   qsa('[data-lang-seg] button').forEach((b) => b.addEventListener('click', () => setLang(b.dataset.lang)));

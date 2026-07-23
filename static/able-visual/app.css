@@ -67,7 +67,7 @@
 
 * { box-sizing: border-box; }
 html { min-width: 320px; min-height: 100%; background: var(--canvas-deep); }
-body { min-width: 320px; min-height: 100dvh; margin: 0; overflow-x: hidden; overscroll-behavior-y: contain; background: var(--canvas-deep); color: var(--text); font-family: var(--font-body); font-size: 16px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+body { min-width: 320px; min-height: 100dvh; margin: 0; overflow-x: hidden; overscroll-behavior-y: contain; overscroll-behavior-x: none; background: var(--canvas-deep); color: var(--text); font-family: var(--font-body); font-size: 16px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
 button, input { font: inherit; }
 button, input, .kicker, .status-pill, .active-label, .setting-value, .sheet-meta { font-family: var(--font-ui); }
 h1, h2, .voice-state-label, .chat-overlay header strong { font-family: var(--font-display); font-optical-sizing: auto; }
@@ -238,7 +238,9 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
 .date-strip button strong { margin-top: 2px; font-size: 21px; font-weight: 650; font-variant-numeric: tabular-nums; }
 .date-strip i { width: 5px; height: 5px; margin-top: 4px; border-radius: 50%; background: var(--line-strong); opacity: 0; }
 .date-strip .has-events i { opacity: 1; }
-.date-strip .is-today { color: #09332C; }
+.date-strip .is-today strong { color: var(--primary); }
+.date-strip button[aria-pressed="true"] { color: #09332C; }
+.date-strip button[aria-pressed="true"] strong { color: #09332C; }
 .date-strip .is-today span { color: inherit; }
 .date-strip .is-today.has-events i { background: #09332C; }
 .timeline { display: grid; margin-top: 24px; }
@@ -556,3 +558,11 @@ body:not(.ambient-on) .hero-card::after, body:not(.ambient-on) .ambient-field { 
 .sheet-doc p { margin: 4px 0; font-size: 15px; line-height: 1.5; color: var(--text-soft); }
 .sheet-doc ul { margin: 5px 0; padding-left: 20px; }
 .sheet-doc li { font-size: 15px; line-height: 1.5; color: var(--text-soft); margin: 3px 0; }
+
+/* --- Voice X over de gradient (geen losse cirkel) --- */
+.voice-header .icon-button { background: transparent; border: 0; box-shadow: none; color: rgba(10,10,10,.5); }
+.voice-header .icon-button:active { transform: scale(.9); }
+
+/* --- Profiel-icoon: alleen bovenaan zichtbaar, fadet weg bij scrollen --- */
+.topbar-avatar { transition: opacity .2s ease, transform .2s ease; }
+.topbar-avatar.scrolled { opacity: 0; transform: translateY(-8px); pointer-events: none; }
