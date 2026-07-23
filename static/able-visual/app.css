@@ -1,3 +1,9 @@
+@property --voice-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
 :root {
   color-scheme: dark;
   --canvas: #09332C;
@@ -21,9 +27,6 @@
   --shadow-card: 0 1px 0 color-mix(in srgb, #F3F3F2 8%, transparent), 0 12px 30px color-mix(in srgb, #09332C 38%, transparent);
   --shadow-float: 0 2px 0 color-mix(in srgb, #F3F3F2 10%, transparent), 0 18px 48px color-mix(in srgb, #09332C 58%, transparent);
   --app-background: #09332C;
-  --sphere-gradient:
-    radial-gradient(circle at 68% 28%, #F4FF00 0 6%, transparent 28%),
-    radial-gradient(circle at 33% 70%, #00FF7C 0, #007755 42%, #09332C 82%);
   --radius-s: 14px;
   --radius-m: 20px;
   --radius-l: 28px;
@@ -265,26 +268,21 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
 .empty-state h2 { margin: 18px 0 4px; font-size: 24px; font-weight: 600; }
 .empty-state p { margin: 0; color: var(--text-soft); }
 
-.voice-screen { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; }
-.voice-header { display: flex; align-items: start; justify-content: space-between; gap: 14px; }
-.voice-header h1 { font-size: 34px; }
-.voice-stage { display: grid; grid-template-rows: auto auto auto; place-items: center; align-content: center; flex: 1 1 auto; gap: 18px; min-height: 0; padding: 18px 0 14px; text-align: center; }
-.voice-sphere { position: relative; width: min(54vw, 210px, 26dvh); aspect-ratio: 1; padding: 0; border: 0; border-radius: 50%; background: transparent; transition: transform .3s var(--ease), filter .3s; }
-.sphere-core, .sphere-ring, .sphere-sweep { position: absolute; border-radius: 50%; pointer-events: none; }
-.sphere-core { inset: 10%; overflow: hidden; background: var(--sphere-gradient); box-shadow: inset -18px -24px 36px color-mix(in srgb, #09332C 42%, transparent), 0 24px 70px color-mix(in srgb, var(--accent) 48%, transparent); transition: inset .35s var(--ease), filter .35s, border-radius .35s; }
-.sphere-ring { inset: 2%; border: 2px solid color-mix(in srgb, var(--primary) 48%, transparent); transition: inset .35s var(--ease), opacity .25s; }
-.sphere-sweep { inset: 13%; overflow: hidden; opacity: 0; }
-.sphere-sweep::after { content: ""; position: absolute; inset: -30%; background: linear-gradient(105deg, transparent 37%, color-mix(in srgb, #F3F3F2 34%, transparent) 50%, transparent 63%); transform: translateX(-80%); }
-.voice-sphere.state-idle .sphere-core { animation: sphere-breathe 3.4s ease-in-out infinite; }
-.voice-sphere.state-listening .sphere-core { inset: 7%; animation: sphere-breathe 1.8s ease-in-out infinite; }
-.voice-sphere.state-listening .sphere-ring { animation: release-ring 1.4s ease-out infinite; }
-.voice-sphere.state-thinking .sphere-core { border-radius: 46% 54% 58% 42%; animation: sphere-think 2.2s ease-in-out infinite; }
-.voice-sphere.state-thinking .sphere-sweep { opacity: 1; }
-.voice-sphere.state-thinking .sphere-sweep::after { animation: light-sweep 1.25s ease-in-out infinite; }
-.voice-sphere.state-speaking .sphere-core { animation: sphere-speak .72s ease-in-out infinite alternate; }
-.voice-sphere.state-speaking .sphere-ring { animation: release-ring 1s ease-out infinite; }
-.voice-state-label { margin: 0; font-size: 16px; font-weight: 600; }
-.voice-transcript { min-height: 32px; padding: 0 12px; color: var(--text-soft); font-size: 16px; line-height: 1.55; text-align: center; }
+.app-view.voice-active { background: #F3F3F2; }
+.voice-edge-ring { --voice-angle: 0deg; --voice-reach: 13%; position: absolute; z-index: 2; inset: 0; opacity: 0; pointer-events: none; background: conic-gradient(from var(--voice-angle), #F4FF00 0deg, #00FF7C 120deg, #007755 220deg, #F4FF00 360deg); -webkit-mask-image: linear-gradient(to right, #000 0%, transparent var(--voice-reach), transparent calc(100% - var(--voice-reach)), #000 100%), linear-gradient(to bottom, #000 0%, transparent var(--voice-reach), transparent calc(100% - var(--voice-reach)), #000 100%); mask-image: linear-gradient(to right, #000 0%, transparent var(--voice-reach), transparent calc(100% - var(--voice-reach)), #000 100%), linear-gradient(to bottom, #000 0%, transparent var(--voice-reach), transparent calc(100% - var(--voice-reach)), #000 100%); filter: blur(24px) saturate(.92); transition: opacity .35s ease, filter .35s ease; }
+.app-view.voice-active .voice-edge-ring { opacity: .72; animation: voice-border-rotate 22s linear infinite, voice-border-breathe 7s ease-in-out infinite alternate; }
+.app-view.voice-active .voice-edge-ring.state-listening { --voice-reach: 18%; opacity: .9; filter: blur(20px) saturate(1.06); animation-duration: 14s, 2.2s; }
+.app-view.voice-active .voice-edge-ring.state-thinking { --voice-reach: 16%; opacity: .78; animation-duration: 22s, 5.5s; }
+.app-view.voice-active .voice-edge-ring.state-speaking { --voice-reach: 20%; opacity: .95; filter: blur(18px) saturate(1.08); animation-duration: 10s, 1.8s; }
+.voice-screen { position: relative; z-index: 3; display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; color: #0A0A0A; }
+.voice-header { display: flex; align-items: start; justify-content: flex-end; min-height: 44px; }
+.voice-stage { display: grid; grid-template-rows: 1fr auto; place-items: center; flex: 1 1 auto; gap: 24px; min-height: 0; padding: 18px 0 14px; text-align: center; }
+.voice-copy { display: grid; place-items: center; width: min(100%, 350px); min-height: 190px; color: #0A0A0A; }
+.voice-status-text, .voice-spoken-words { margin: 0; font-family: var(--font-display); font-size: clamp(30px, 8.5vw, 38px); font-weight: 540; line-height: 1.2; letter-spacing: -.04em; text-wrap: balance; }
+.voice-copy.state-thinking .voice-status-text { color: transparent; background: linear-gradient(105deg, #0A0A0A 30%, rgba(10,10,10,.28) 47%, #0A0A0A 64%); background-size: 220% 100%; background-clip: text; -webkit-background-clip: text; animation: voice-text-shimmer 1.45s ease-in-out infinite; }
+.voice-spoken-words { max-width: 340px; }
+.voice-spoken-words span { display: inline-block; margin-right: .2em; opacity: 0; transform: translateY(10px); transition: opacity .28s ease-out, transform .34s var(--ease); }
+.voice-spoken-words span.is-visible { opacity: 1; transform: translateY(0); }
 .voice-controls { display: grid; grid-template-columns: 48px 1fr 48px; align-items: center; flex: 0 0 auto; gap: 14px; margin-top: 14px; }
 .secondary-circle { border-radius: 50%; }
 .voice-main-button { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 58px; padding: 10px 20px; border: 0; border-radius: var(--radius-l); background: var(--voice-button); color: var(--voice-icon); font-weight: 600; box-shadow: var(--shadow-float); }
@@ -399,11 +397,9 @@ body:not(.ambient-on) .hero-card::after, body:not(.ambient-on) .ambient-field { 
 @keyframes resolve-mark { 0% { opacity:0; transform:translate(-50%,-50%) scale(.7); } 48% { opacity:1; transform:translate(-50%,-50%) scale(1); } 100% { opacity:0; transform:translate(-50%,-50%) scale(1.08); } }
 @keyframes thinking-sweep { to { transform:translateX(100%); } }
 @keyframes thought-dot { to { transform:translateY(-6px); opacity:.42; } }
-@keyframes sphere-breathe { 50% { transform:scale(1.035); filter:brightness(1.08); } }
-@keyframes sphere-think { 50% { transform:rotate(12deg) scale(1.025); } }
-@keyframes sphere-speak { to { transform:scale(1.07); filter:brightness(1.12); } }
-@keyframes release-ring { 70% { inset:-10%; opacity:0; } }
-@keyframes light-sweep { to { transform:translateX(80%); } }
+@keyframes voice-text-shimmer { from { background-position: 110% 0; } to { background-position: -110% 0; } }
+@keyframes voice-border-rotate { to { --voice-angle: 360deg; } }
+@keyframes voice-border-breathe { from { opacity: .68; } to { opacity: .96; } }
 @keyframes sheet-up { from { opacity:0; transform:translateY(35px); } }
 @keyframes fade-in { from { opacity:0; } }
 @keyframes toast-in { from { opacity:0; transform:translate(-50%,12px); } }
@@ -493,3 +489,33 @@ body:not(.ambient-on) .hero-card::after, body:not(.ambient-on) .ambient-field { 
   font-size: 0.9rem;
   letter-spacing: -0.01em;
 }
+
+/* --- 6b: tekstgrootte, taal, spraakbudget, gebruikers --- */
+:root[data-text="groot"] .app-main { zoom: 1.12; }
+:root[data-text="xl"] .app-main { zoom: 1.24; }
+
+.setting-stack { display: flex; flex-direction: column; gap: 11px; padding: 15px 14px; }
+.setting-stack + .setting-stack, .setting-row + .setting-stack, .setting-stack + .setting-row { border-top: 1px solid var(--line); }
+.setting-stack > strong { font-size: 16px; font-weight: 600; }
+
+.seg { display: flex; gap: 5px; padding: 5px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-muted); }
+.seg button { flex: 1; border: 0; border-radius: 10px; padding: 10px 6px; background: transparent; color: var(--text-soft); font-weight: 600; font-size: 15px; cursor: pointer; transition: background .16s ease, color .16s ease; }
+.seg button.on { background: var(--primary); color: var(--primary-ink); }
+
+.vbudget { display: flex; flex-direction: column; gap: 10px; padding: 16px 14px; }
+.vbudget-meta { display: flex; justify-content: space-between; font-size: 14px; font-weight: 600; color: var(--text-soft); }
+.vbudget-track { height: 10px; border-radius: 999px; background: var(--surface-muted); overflow: hidden; }
+.vbudget-fill { height: 100%; width: 0; border-radius: 999px; background: var(--primary); transition: width .45s ease, background .3s ease; }
+.vbudget-fill.amber { background: #F5B841; }
+.vbudget-fill.red { background: #F5674A; }
+
+.userrow { display: grid; grid-template-columns: 40px 1fr auto; align-items: center; gap: 11px; min-height: 64px; padding: 11px 14px; }
+.userrow + .userrow { border-top: 1px solid var(--line); }
+.userrow strong { display: block; font-size: 16px; }
+.uava { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-muted); color: var(--text); font-weight: 700; }
+.upill { display: block; font-size: 13px; color: var(--text-faint); font-weight: 500; }
+.udel { width: 38px; height: 38px; border: 0; border-radius: 10px; background: transparent; color: var(--text-soft); display: grid; place-items: center; cursor: pointer; }
+.udel svg { width: 19px; height: 19px; }
+.udel:active { background: color-mix(in srgb, #F5674A 16%, transparent); color: #F5674A; }
+.useradd { display: flex; flex-direction: column; gap: 9px; padding: 14px; border-top: 1px solid var(--line); }
+.useradd input { min-height: 46px; padding: 11px 14px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); color: var(--text); font-size: 16px; }

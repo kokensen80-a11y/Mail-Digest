@@ -263,6 +263,72 @@
     });
   };
 
+  // --- Tekstgrootte (client-side via zoom) ------------------------------------
+  const applyTextScale = (size) => {
+    const s = ['normal', 'groot', 'xl'].includes(size) ? size : 'normal';
+    root.dataset.text = s;
+    qsa('[data-text-seg] button').forEach((b) => b.classList.toggle('on', b.dataset.textSize === s));
+    try { localStorage.setItem('able-textsize', s); } catch (e) {}
+  };
+
+  // --- Taal (server-side: stuurt spraakherkenning + antwoorden) ---------------
+  const applyLangUI = (lang) => {
+    const l = lang === 'en' ? 'en' : 'nl';
+    qsa('[data-lang-seg] button').forEach((b) => b.classList.toggle('on', b.dataset.lang === l));
+  };
+  const setLang = async (lang) => {
+    applyLangUI(lang);
+    try { await api('/api/settings', { method: 'POST', body: JSON.stringify({ lang }) }); } catch (e) {}
+    showToast(lang === 'en' ? 'Language set to English.' : 'Taal ingesteld op Nederlands.');
+  };
+
+  // --- Spraakbudget -----------------------------------------------------------
+  const loadVoiceBudget = async () => {
+    let d = {};
+    try { d = await (await api('/api/voice-usage')).json(); } catch (e) {}
+    const pct = Math.max(0, Math.min(100, Number(d.pct) || 0));
+    const fill = qs('[data-budget-fill]');
+    if (fill) {
+      fill.style.width = pct + '%';
+      fill.classList.toggle('amber', pct >= 60 && pct < 90);
+      fill.classList.toggle('red', pct >= 90);
+    }
+    const eur = (c) => '€' + ((Number(c) || 0) / 100).toFixed(2).replace('.', ',');
+    setText('[data-budget-text]', `${eur(d.spent_cents)} / ${eur(d.cap_cents)}`);
+  };
+
+  // --- Gebruikersbeheer (alleen admin) ----------------------------------------
+  const loadUsers = async () => {
+    const group = qs('[data-admin-users]');
+    if (!group) return;
+    if (!currentUser || !currentUser.is_admin) { group.hidden = true; return; }
+    group.hidden = false;
+    let users = [];
+    try { users = (await (await api('/api/users')).json()).users || []; } catch (e) {}
+    const list = qs('[data-users-list]');
+    if (!list) return;
+    list.innerHTML = users.map((u) => {
+      const tag = u.is_admin ? 'Beheerder' : (u.has_google ? 'Google gekoppeld' : 'Nog geen Google');
+      const del = u.is_admin ? '' : `<button class="udel" data-del-user="${u.id}" aria-label="Verwijder ${escapeHTML(u.name)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg></button>`;
+      return `<div class="userrow"><span class="uava">${escapeHTML((u.name || '?').slice(0, 1).toUpperCase())}</span><span><strong>${escapeHTML(u.name)}</strong><small class="upill">@${escapeHTML(u.username)} · ${tag}</small></span>${del}</div>`;
+    }).join('');
+    qsa('[data-del-user]', list).forEach((btn) => btn.addEventListener('click', async () => {
+      const id = Number(btn.dataset.delUser);
+      const u = users.find((x) => x.id === id);
+      if (!window.confirm(`${u ? u.name : 'Deze gebruiker'} en al hun gegevens definitief verwijderen?`)) return;
+      try { await api('/api/users/delete', { method: 'POST', body: JSON.stringify({ id }) }); } catch (e) {}
+      await loadUsers();
+      showToast('Gebruiker verwijderd.');
+    }));
+  };
+
+  const loadMore = () => {
+    loadIntegrations();
+    loadVoiceBudget();
+    loadUsers();
+    api('/api/settings').then((r) => r.json()).then((s) => applyLangUI(s.lang || 'nl')).catch(() => {});
+  };
+
   // --- Planning: echte agenda-tijdlijn + week-strip ---------------------------
   const WD_SHORT = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
   const dateKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -385,7 +451,7 @@
       });
       activeScreen = target;
       if (target === 'planning') { loadPlanning(); loadTasks(); }
-      if (target === 'more') loadIntegrations();
+      if (target === 'more') loadMore();
       appView.classList.toggle('voice-active', target === 'voice');
       const navOrder = ['home', 'planning', 'voice', 'mail', 'more'];
       root.style.setProperty('--nav-index', String(navOrder.indexOf(target)));
@@ -749,6 +815,24 @@
 
   qsa('[data-toast-message]').forEach((button) => button.addEventListener('click', () => showToast(button.dataset.toastMessage)));
   qs('[data-connect-google]')?.addEventListener('click', connectGoogle);
+  qsa('[data-text-seg] button').forEach((b) => b.addEventListener('click', () => applyTextScale(b.dataset.textSize)));
+  qsa('[data-lang-seg] button').forEach((b) => b.addEventListener('click', () => setLang(b.dataset.lang)));
+  applyTextScale(localStorage.getItem('able-textsize') || 'normal');
+  qs('[data-user-add]')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const f = event.currentTarget;
+    const name = qs('input[name="name"]', f).value.trim();
+    const username = qs('input[name="username"]', f).value.trim().toLowerCase();
+    const password = qs('input[name="password"]', f).value;
+    if (!name || !username || password.length < 4) { showToast('Vul naam, gebruikersnaam en wachtwoord (min. 4) in.'); return; }
+    try {
+      const r = await api('/api/users', { method: 'POST', body: JSON.stringify({ name, username, password }) });
+      if (!r.ok) throw new Error('add');
+      f.reset();
+      await loadUsers();
+      showToast(`${name} toegevoegd.`);
+    } catch (e) { showToast('Toevoegen lukte niet (bestaat de gebruikersnaam al?).'); }
+  });
   qs('[data-log-out]')?.addEventListener('click', async () => {
     try { await api('/api/logout', { method: 'POST' }); } catch (e) {}
     currentUser = null;
