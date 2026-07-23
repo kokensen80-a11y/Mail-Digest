@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Changa:wght@200..800&amp;family=Elms+Sans:ital,wght@0,100..900;1,100..900&amp;family=Geist:wght@100..900&amp;family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="app.css?v=15">
+  <link rel="stylesheet" href="app.css?v=17">
 </head>
 <body>
   <a class="skip-link" href="#app-main">Ga naar inhoud</a>
@@ -179,7 +179,7 @@
               <h1 id="more-title">Instellingen</h1>
             </div>
             <div class="settings-card">
-              <button class="setting-row list-appear" type="button" data-settings-open="aanpassen"><span class="setting-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h11M18 7h2M4 12h2M9 12h11M4 17h7M14 17h6"/><circle cx="16.5" cy="7" r="1.6"/><circle cx="7.5" cy="12" r="1.6"/><circle cx="12.5" cy="17" r="1.6"/></svg></span><span><strong>Aanpassen</strong><small>Thema, tekst, profiel</small></span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+              <button class="setting-row list-appear" type="button" data-settings-open="aanpassen"><span class="setting-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h11M18 7h2M4 12h2M9 12h11M4 17h7M14 17h6"/><circle cx="16.5" cy="7" r="1.6"/><circle cx="7.5" cy="12" r="1.6"/><circle cx="12.5" cy="17" r="1.6"/></svg></span><span><strong>Aanpassen</strong><small>Thema, glow, tekstgrootte</small></span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
               <button class="setting-row list-appear" type="button" data-settings-open="taal"><span class="setting-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 100 18 9 9 0 000-18M3 12h18M12 3c2.5 2.4 2.5 15.6 0 18M12 3c-2.5 2.4-2.5 15.6 0 18"/></svg></span><span><strong>Taal &amp; spraak</strong><small>Taal, stem, budget</small></span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
               <button class="setting-row list-appear" type="button" data-settings-open="diensten"><span class="setting-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17H7A5 5 0 017 7h2M15 7h2a5 5 0 010 10h-2M8 12h8"/></svg></span><span><strong>Diensten</strong><small>Google, mail, OpenAI</small></span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
               <button class="setting-row list-appear" type="button" data-settings-open="gebruikers" data-admin-only hidden><span class="setting-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c1-3.6 4-5 5.5-5s4.5 1.4 5.5 5"/><path d="M16 5.4a3 3 0 010 5.9M16.5 20c-.2-2 .3-3.8 1.8-4.4"/></svg></span><span><strong>Gebruikers</strong><small>Personen beheren</small></span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
@@ -203,6 +203,12 @@
                   <button type="button" data-text-size="xl">Extra</button>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <div data-settings-panel="profiel" hidden>
+            <div class="detail-header"><button class="back-btn" type="button" data-settings-back aria-label="Terug"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button><h1>Profiel</h1></div>
+            <div class="settings-card">
               <div class="profile-edit">
                 <div class="profile-top">
                   <button class="profile-pic" type="button" data-avatar-pick aria-label="Kies profielfoto"><img data-av-img alt="" hidden><span data-av-initial>?</span></button>
@@ -213,8 +219,9 @@
                   <input type="file" accept="image/*" data-avatar-file hidden>
                 </div>
                 <form class="profile-name" data-profile-name-form>
+                  <label class="profile-name-label">Naam</label>
                   <input type="text" data-profile-name placeholder="Je naam" maxlength="40" autocomplete="off" required>
-                  <button class="primary-button" type="submit"><span>Opslaan</span></button>
+                  <button class="primary-button" type="submit"><span>Naam opslaan</span></button>
                 </form>
               </div>
             </div>
@@ -333,6 +340,6 @@
   </div>
 
   <div class="toast" role="status" aria-live="polite" data-toast hidden><span data-toast-text></span><button type="button" data-toast-action hidden>Ongedaan maken</button></div>
-  <script src="app.js?v=15"></script>
+  <script src="app.js?v=17"></script>
 </body>
 </html>

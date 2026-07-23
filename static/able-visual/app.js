@@ -1121,7 +1121,10 @@
       showToast('Naam opgeslagen.');
     } catch (e) { showToast('Naam opslaan lukte niet.'); }
   });
-  qs('[data-topbar-avatar]')?.addEventListener('click', () => navigate('more'));
+  qs('[data-topbar-avatar]')?.addEventListener('click', () => {
+    navigate('more');
+    window.setTimeout(() => openSettingsPanel('profiel'), 200);
+  });
 
   // Live klok (agenda-kop) + profiel-icoon dat wegfadet zodra je scrollt.
   const updateClock = () => setText('[data-live-clock]', new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }));

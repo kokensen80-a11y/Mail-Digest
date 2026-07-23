@@ -143,7 +143,7 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
 
 .app-view { position: relative; z-index: 1; width: 100%; height: 100%; overflow: hidden; background: transparent; --pull-distance: 0px; }
 .icon-button, .round-action, .secondary-circle { display: grid; place-items: center; width: 44px; min-width: 44px; height: 44px; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-m); background: var(--surface); box-shadow: var(--shadow-card); }
-.app-main { position: relative; z-index: 1; width: 100%; height: 100%; overflow-x: hidden; overflow-y: auto; padding: calc(30px + env(safe-area-inset-top)) 20px calc(112px + env(safe-area-inset-bottom)); overscroll-behavior-y: contain; scrollbar-width: none; }
+.app-main { position: relative; z-index: 1; width: 100%; height: 100%; overflow-x: hidden; overflow-y: auto; padding: calc(30px + env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) calc(96px + env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); overscroll-behavior-y: contain; scrollbar-width: none; }
 .app-main::-webkit-scrollbar { display: none; }
 .app-screen { animation: screen-crossfade .28s var(--ease) both; }
 .app-screen.is-leaving { animation: screen-fade-out .14s ease-in both; }
@@ -543,10 +543,11 @@ body:not(.ambient-on) .hero-card::after, body:not(.ambient-on) .ambient-field { 
 .profile-actions button { background: none; border: 0; padding: 0; text-align: left; font-family: var(--font-ui);
   font-size: 15px; font-weight: 600; color: var(--primary); cursor: pointer; }
 .profile-actions button.remove { color: var(--text-soft); }
-.profile-name { display: flex; gap: 9px; }
-.profile-name input { flex: 1; min-height: 48px; padding: 12px 14px; border: 1px solid var(--line);
+.profile-name { display: flex; flex-direction: column; gap: 9px; }
+.profile-name-label { margin-left: 2px; font-size: 14px; font-weight: 600; color: var(--text-soft); }
+.profile-name input { width: 100%; min-width: 0; min-height: 48px; padding: 12px 14px; border: 1px solid var(--line);
   border-radius: 14px; background: var(--surface); color: var(--text); font-size: 16px; }
-.profile-name button { min-height: 48px; padding: 0 18px; width: auto; }
+.profile-name button { width: 100%; min-height: 48px; }
 
 /* --- Instellingen v2: rode uitlog-rij, Google-icoon, voorwaarden-sheet --- */
 .logout-row .setting-icon { color: #F5674A; background: color-mix(in srgb, #F5674A 16%, transparent); }
@@ -605,3 +606,6 @@ body:not(.ambient-on) .hero-card::after, body:not(.ambient-on) .ambient-field { 
 .crop-zoom { flex: 1; accent-color: var(--primary); }
 .crop-actions { display: flex; gap: 10px; }
 .crop-actions button { flex: 1; }
+
+/* Refresh: geen bevestigingsvinkje tonen */
+.resolve-mark { display: none !important; }
