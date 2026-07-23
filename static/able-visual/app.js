@@ -129,6 +129,18 @@
       state.tasks = todos.map((t) => ({ id: t.id, title: t.text || '', complete: false }));
       renderTasks();
     } catch (e) {}
+
+    try {
+      const hist = (await (await api('/api/history')).json()).items || [];
+      const lastUser = [...hist].reverse().find((m) => m.role === 'user');
+      if (lastUser && lastUser.content) {
+        setText('[data-recent-title]', lastUser.content.slice(0, 46));
+        setText('[data-recent-sub]', `${hist.length} berichten`);
+      } else {
+        setText('[data-recent-title]', 'Begin een gesprek');
+        setText('[data-recent-sub]', 'Able kent je dag al');
+      }
+    } catch (e) {}
   };
 
   const applyTheme = (theme) => {
@@ -267,6 +279,7 @@
     if (!state.onboarded || !qs(`[data-screen="${target}"]`)) return;
     const current = qs('[data-screen].is-active');
     if (current?.dataset.screen === target) return;
+    if (activeScreen === 'voice' && target !== 'voice') stopVoice();
     current?.classList.add('is-leaving');
     window.setTimeout(() => {
       qsa('[data-screen]').forEach((screen) => {
@@ -281,6 +294,7 @@
         element.classList.add('list-appear');
       });
       activeScreen = target;
+      appView.classList.toggle('voice-active', target === 'voice');
       const navOrder = ['home', 'planning', 'voice', 'mail', 'more'];
       root.style.setProperty('--nav-index', String(navOrder.indexOf(target)));
       qsa('[data-bottom-nav] [data-nav-target]').forEach((button) => {
@@ -518,18 +532,54 @@
   qsa('[data-open-chat]').forEach((button) => button.addEventListener('click', (event) => openChat(event)));
   qs('[data-close-chat]')?.addEventListener('click', closeChat);
   const chatForm = qs('[data-chat-form]');
-  const sendChatMessage = (message) => {
-    if (!message) return;
+  let chatBusy = false;
+  const sendChatMessage = async (message) => {
+    if (!message || chatBusy) return;
+    chatBusy = true;
     const thread = qs('[data-chat-thread]');
     qs('.chat-empty', thread)?.remove();
     thread.insertAdjacentHTML('beforeend', `<div class="chat-bubble user">${escapeHTML(message)}</div>`);
     thread.insertAdjacentHTML('beforeend', '<div class="chat-thinking" data-chat-thinking role="status" aria-label="Able denkt"><span></span><span></span><span></span></div>');
     thread.scrollTop = thread.scrollHeight;
-    window.setTimeout(() => {
+
+    let bubble = null;
+    const ensureBubble = () => {
       qs('[data-chat-thinking]', thread)?.remove();
-      thread.insertAdjacentHTML('beforeend', '<div class="chat-bubble able">Je hebt om 15:00 een vrij uur. Ik kan dat beschermen voor je voorstel, of eerst je mail met Maya afronden.</div>');
+      if (!bubble) {
+        thread.insertAdjacentHTML('beforeend', '<div class="chat-bubble able"></div>');
+        bubble = thread.lastElementChild;
+      }
+      return bubble;
+    };
+    try {
+      const res = await api('/api/chat/stream', { method: 'POST', body: JSON.stringify({ message }) });
+      if (!res.ok || !res.body) throw new Error('stream');
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let acc = '';
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const text = decoder.decode(value, { stream: true });
+        if (!text) continue;
+        acc += text;
+        ensureBubble().textContent = acc;
+        thread.scrollTop = thread.scrollHeight;
+      }
+      if (!bubble) ensureBubble().textContent = 'Genoteerd.';
+    } catch (e) {
+      try {
+        const r = await api('/api/chat', { method: 'POST', body: JSON.stringify({ message }) });
+        const d = await r.json();
+        ensureBubble().textContent = d.reply || 'Sorry, daar ging iets mis. Probeer het zo nog eens?';
+      } catch (e2) {
+        ensureBubble().textContent = 'Sorry, daar ging iets mis. Probeer het zo nog eens?';
+      }
+    } finally {
+      qs('[data-chat-thinking]', thread)?.remove();
       thread.scrollTop = thread.scrollHeight;
-    }, 1600);
+      chatBusy = false;
+    }
   };
   chatForm?.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -549,37 +599,56 @@
     voiceTimers.forEach((timer) => window.clearTimeout(timer));
     voiceTimers = [];
   };
+  const voiceAnswer = 'Morgen om tien uur heb je ruimte. Ik kan dat uur voor je voorstel beschermen.';
+  const revealVoiceAnswer = () => {
+    const spoken = qs('[data-voice-spoken]');
+    const words = voiceAnswer.split(/\s+/);
+    spoken.innerHTML = words.map((word) => `<span aria-hidden="true">${escapeHTML(word)}</span>`).join(' ');
+    spoken.setAttribute('aria-label', voiceAnswer);
+    qsa('span', spoken).forEach((word, index) => {
+      voiceTimers.push(window.setTimeout(() => word.classList.add('is-visible'), index * 185));
+    });
+  };
   const setVoiceState = (voiceState) => {
-    const sphere = qs('[data-voice-sphere]');
-    const title = qs('[data-voice-title]');
-    const label = qs('[data-voice-label]');
-    const transcript = qs('[data-voice-transcript]');
-    const controlLabel = qs('[data-voice-sphere-control] span');
-    ['idle', 'listening', 'thinking', 'speaking'].forEach((name) => sphere.classList.remove(`state-${name}`));
-    sphere.classList.add(`state-${voiceState}`);
+    const voiceCopy = qs('[data-voice-copy]');
+    const statusText = qs('[data-voice-status-text]');
+    const spoken = qs('[data-voice-spoken]');
+    const edge = qs('[data-voice-edge]');
+    const controlLabel = qs('[data-voice-control] span');
+    ['idle', 'listening', 'thinking', 'speaking'].forEach((name) => {
+      voiceCopy.classList.remove(`state-${name}`);
+      edge.classList.remove(`state-${name}`);
+    });
+    voiceCopy.classList.add(`state-${voiceState}`);
+    edge.classList.add(`state-${voiceState}`);
+    qs('[data-screen="voice"]').dataset.voiceState = voiceState;
     const copy = {
-      idle: ['Klaar wanneer jij dat bent.', 'Raak de sphere aan om te praten', '', 'Praat'],
-      listening: ['Ik luister.', 'Vertel rustig wat je nodig hebt', '“Plan morgen een rustig uur voor het voorstel.”', 'Stop'],
-      thinking: ['Eén moment.', 'Able ordent je verzoek', 'Ik bekijk je planning en open taken…', 'Denkt'],
-      speaking: ['Dit kan rustig passen.', 'Able antwoordt', 'Morgen om 10:00 heb je een vrij uur. Ik kan dat als focusblok reserveren.', 'Praat']
+      idle: ['Klaar wanneer jij dat bent.', 'Praat'],
+      listening: ['Ik luister…', 'Stop'],
+      thinking: ['Thinking…', 'Denkt'],
+      speaking: ['', 'Stop']
     }[voiceState];
-    [title.textContent, label.textContent, transcript.textContent, controlLabel.textContent] = copy;
-    sphere.setAttribute('aria-label', voiceState === 'idle' ? 'Start luisteren' : 'Stop voice');
+    [statusText.textContent, controlLabel.textContent] = copy;
+    statusText.hidden = voiceState === 'speaking';
+    spoken.hidden = voiceState !== 'speaking';
+    spoken.innerHTML = '';
+    spoken.removeAttribute('aria-label');
+    if (voiceState === 'speaking') revealVoiceAnswer();
   };
   const startVoiceSequence = () => {
     clearVoiceTimers();
     setVoiceState('listening');
-    voiceTimers.push(window.setTimeout(() => setVoiceState('thinking'), 2300));
+    voiceTimers.push(window.setTimeout(() => setVoiceState('thinking'), 2400));
     voiceTimers.push(window.setTimeout(() => setVoiceState('speaking'), 4200));
-    voiceTimers.push(window.setTimeout(() => setVoiceState('idle'), 6900));
+    voiceTimers.push(window.setTimeout(() => setVoiceState('idle'), 7200));
   };
   const stopVoice = () => {
     clearVoiceTimers();
     setVoiceState('idle');
   };
-  qsa('[data-voice-sphere], [data-voice-sphere-control]').forEach((button) => button.addEventListener('click', () => {
-    const sphere = qs('[data-voice-sphere]');
-    if (sphere.classList.contains('state-idle')) startVoiceSequence();
+  qsa('[data-voice-control]').forEach((button) => button.addEventListener('click', () => {
+    const voiceScreen = qs('[data-screen="voice"]');
+    if (voiceScreen.dataset.voiceState === 'idle') startVoiceSequence();
     else stopVoice();
   }));
   qsa('[data-stop-voice]').forEach((button) => button.addEventListener('click', () => {

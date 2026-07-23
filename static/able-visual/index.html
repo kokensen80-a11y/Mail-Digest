@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Changa:wght@200..800&amp;family=Elms+Sans:ital,wght@0,100..900;1,100..900&amp;family=Geist:wght@100..900&amp;family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="app.css?v=3">
+  <link rel="stylesheet" href="app.css?v=4">
 </head>
 <body>
   <a class="skip-link" href="#app-main">Ga naar inhoud</a>
@@ -50,6 +50,7 @@
 
     <div class="app-view" data-app-view hidden>
       <div class="pull-indicator" data-pull-indicator aria-hidden="true"><span></span></div>
+      <div class="voice-edge-ring state-idle" data-voice-edge aria-hidden="true"></div>
       <div class="loading-overlay" data-loading-overlay hidden aria-hidden="true">
         <div class="skeleton-stack">
           <div class="skeleton-card"><i class="skeleton-line skeleton-heading"></i><i class="skeleton-line"></i><i class="skeleton-line skeleton-short"></i></div>
@@ -89,7 +90,7 @@
           <section class="content-section">
             <button class="section-title section-heading-surface section-heading-button press-card" type="button" data-open-chat><h2>Recente chats</h2><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
             <div class="list-card home-recent-list">
-              <button class="list-row press-card" type="button" data-open-chat><span class="list-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v12H8l-4 3V5Z"/><path d="M8 9h8M8 13h5"/></svg></span><span><strong>Planning voor een rustige week</strong><small>Gisteren · 8 berichten</small></span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+              <button class="list-row press-card" type="button" data-open-chat><span class="list-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v12H8l-4 3V5Z"/><path d="M8 9h8M8 13h5"/></svg></span><span><strong data-recent-title>Planning voor een rustige week</strong><small data-recent-sub>Gisteren · 8 berichten</small></span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
               <button class="list-row press-card" type="button" data-nav-target="mail"><span class="list-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg></span><span><strong>Maya wacht op een datum</strong><small>2 dagen · antwoord voorgesteld</small></span><span class="status-pill">Antwoord</span></button>
             </div>
           </section>
@@ -142,18 +143,19 @@
 
         <section class="app-screen voice-screen" id="screen-voice" data-screen="voice" aria-labelledby="voice-title" hidden>
           <div class="voice-header">
-            <div><h1 id="voice-title" data-voice-title>Klaar wanneer jij dat bent.</h1></div>
+            <h1 class="sr-only" id="voice-title">Praat met Able</h1>
             <button class="icon-button" type="button" aria-label="Stop voice" data-stop-voice><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
           </div>
           <div class="voice-stage">
-            <button class="voice-sphere state-idle" type="button" aria-label="Start luisteren" data-voice-sphere><span class="sphere-core"></span><span class="sphere-ring"></span><span class="sphere-sweep"></span></button>
-            <p class="voice-state-label" data-voice-label>Raak de sphere aan om te praten</p>
+            <div class="voice-copy state-idle" data-voice-copy role="status" aria-live="polite" aria-atomic="true">
+              <p class="voice-status-text" data-voice-status-text>Klaar wanneer jij dat bent.</p>
+              <p class="voice-spoken-words" data-voice-spoken hidden></p>
+            </div>
             <button class="cant-talk-button quiet-button" type="button" data-open-chat><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v12H8l-4 3V5Z"/></svg><span>Ik kan nu niet praten</span></button>
           </div>
-          <div class="voice-transcript" data-voice-transcript aria-live="polite"></div>
           <div class="voice-controls">
             <button class="secondary-circle" type="button" data-open-chat aria-label="Open tekstchat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v12H8l-4 3V5Z"/></svg></button>
-            <button class="voice-main-button" type="button" data-voice-sphere-control><svg class="rounded-mic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5a3.5 3.5 0 0 0-3.5 3.5v5a3.5 3.5 0 0 0 7 0V7A3.5 3.5 0 0 0 12 3.5Z"/><path d="M5.5 11.5v1a6.5 6.5 0 0 0 13 0v-1M12 19v2"/></svg><span>Praat</span></button>
+            <button class="voice-main-button" type="button" data-voice-control><svg class="rounded-mic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5a3.5 3.5 0 0 0-3.5 3.5v5a3.5 3.5 0 0 0 7 0V7A3.5 3.5 0 0 0 12 3.5Z"/><path d="M5.5 11.5v1a6.5 6.5 0 0 0 13 0v-1M12 19v2"/></svg><span>Praat</span></button>
             <button class="secondary-circle" type="button" data-stop-voice aria-label="Annuleer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
           </div>
         </section>
@@ -249,6 +251,6 @@
   </div>
 
   <div class="toast" role="status" aria-live="polite" data-toast hidden><span data-toast-text></span><button type="button" data-toast-action hidden>Ongedaan maken</button></div>
-  <script src="app.js?v=3"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>
