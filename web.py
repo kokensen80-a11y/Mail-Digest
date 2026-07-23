@@ -305,7 +305,34 @@ async def me(req: Request):
         return {"auth": False}
     u = bot.get_user(_uid(req)) or {}
     return {"auth": True, "name": u.get("name", ""), "username": u.get("username", ""),
-            "is_admin": bool(u.get("is_admin")), "google": bot.google_enabled()}
+            "is_admin": bool(u.get("is_admin")), "google": bot.google_enabled(),
+            "avatar": u.get("avatar")}
+
+
+@app.post("/api/profile")
+async def api_profile(req: Request):
+    if not _authed(req):
+        raise HTTPException(401, "Niet ingelogd")
+    uid = _uid(req)
+    data = await req.json()
+    if "name" in data:
+        name = (data.get("name") or "").strip()
+        if not name:
+            raise HTTPException(400, "Naam mag niet leeg zijn")
+        if len(name) > 40:
+            raise HTTPException(400, "Naam is te lang")
+        bot.set_user_name(uid, name)
+    if "avatar" in data:
+        av = data.get("avatar")
+        if av in (None, ""):
+            bot.set_user_avatar(uid, None)
+        else:
+            if not isinstance(av, str) or not av.startswith("data:image/"):
+                raise HTTPException(400, "Ongeldige afbeelding")
+            if len(av) > 400_000:  # ~300KB na base64; client verkleint vooraf
+                raise HTTPException(413, "Afbeelding te groot")
+            bot.set_user_avatar(uid, av)
+    return {"ok": True}
 
 
 # --- "Koppel Google": web-OAuth per gebruiker ------------------------------

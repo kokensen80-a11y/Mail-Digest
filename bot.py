@@ -168,6 +168,20 @@ def set_user_password(uid: int, pw_hash: str) -> None:
     con.close()
 
 
+def set_user_name(uid: int, name: str) -> None:
+    con = sqlite3.connect(DB_PATH)
+    con.execute("UPDATE users SET name=? WHERE id=?", (name, uid))
+    con.commit()
+    con.close()
+
+
+def set_user_avatar(uid: int, avatar: str | None) -> None:
+    con = sqlite3.connect(DB_PATH)
+    con.execute("UPDATE users SET avatar=? WHERE id=?", (avatar, uid))
+    con.commit()
+    con.close()
+
+
 def delete_user(uid: int) -> None:
     """Verwijder een gebruiker én al zijn data. Gebruiker 1 (Ko) kan niet weg."""
     if int(uid) == 1:
@@ -695,6 +709,9 @@ def init_db() -> None:
                     "VALUES (1, 'ko', 'Ko', ?, ?, 1, ?)",
                     (pw[0] if pw else None, gtok,
                      datetime.now(LOCAL_TZ).isoformat()))
+    # Profielfoto per gebruiker (data-URL). Idempotente migratie.
+    if "avatar" not in _cols("users"):
+        con.execute("ALTER TABLE users ADD COLUMN avatar TEXT")
     con.commit()
     con.close()
 

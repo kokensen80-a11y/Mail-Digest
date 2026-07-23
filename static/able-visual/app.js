@@ -69,6 +69,15 @@
     if (title) title.textContent = name ? `${greet}, ${name}` : greet;
     const kicker = qs('#screen-home .kicker');
     if (kicker) kicker.textContent = `${cap(DAYS_NL[now.getDay()])}, ${now.getDate()} ${MONTHS_NL[now.getMonth()]}`;
+    applyAvatar();
+  };
+  const applyAvatar = () => {
+    const initial = (currentUser && currentUser.name ? currentUser.name : '?').slice(0, 1).toUpperCase();
+    const src = currentUser && currentUser.avatar;
+    qsa('[data-av-img]').forEach((img) => {
+      if (src) { img.src = src; img.hidden = false; } else { img.removeAttribute('src'); img.hidden = true; }
+    });
+    qsa('[data-av-initial]').forEach((el) => { el.textContent = initial; el.hidden = !!src; });
   };
 
   const loginForm = qs('[data-login-form]');
@@ -326,6 +335,9 @@
     loadIntegrations();
     loadVoiceBudget();
     loadUsers();
+    applyAvatar();
+    const pn = qs('[data-profile-name]');
+    if (pn && currentUser) pn.value = currentUser.name || '';
     api('/api/settings').then((r) => r.json()).then((s) => applyLangUI(s.lang || 'nl')).catch(() => {});
   };
 
@@ -955,6 +967,62 @@
   }));
 
   qsa('[data-toast-message]').forEach((button) => button.addEventListener('click', () => showToast(button.dataset.toastMessage)));
+  // --- Profiel: naam wijzigen + foto uit galerij ------------------------------
+  const fileToAvatar = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const size = 256;
+        const canvas = document.createElement('canvas');
+        canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const scale = Math.max(size / img.width, size / img.height);
+        const w = img.width * scale; const h = img.height * scale;
+        ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.onerror = reject;
+      img.src = reader.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+  qsa('[data-avatar-pick]').forEach((b) => b.addEventListener('click', () => qs('[data-avatar-file]')?.click()));
+  qs('[data-avatar-file]')?.addEventListener('change', async (event) => {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    try {
+      const dataUrl = await fileToAvatar(file);
+      const r = await api('/api/profile', { method: 'POST', body: JSON.stringify({ avatar: dataUrl }) });
+      if (!r.ok) throw new Error('avatar');
+      if (currentUser) currentUser.avatar = dataUrl;
+      applyAvatar();
+      showToast('Profielfoto bijgewerkt.');
+    } catch (e) { showToast('Kon de foto niet instellen.'); }
+    event.target.value = '';
+  });
+  qs('[data-avatar-remove]')?.addEventListener('click', async () => {
+    try { await api('/api/profile', { method: 'POST', body: JSON.stringify({ avatar: null }) }); } catch (e) {}
+    if (currentUser) currentUser.avatar = null;
+    applyAvatar();
+    showToast('Profielfoto verwijderd.');
+  });
+  qs('[data-profile-name-form]')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const input = qs('input', event.currentTarget);
+    const name = input.value.trim();
+    if (!name) return;
+    try {
+      const r = await api('/api/profile', { method: 'POST', body: JSON.stringify({ name }) });
+      if (!r.ok) throw new Error('name');
+      if (currentUser) currentUser.name = name;
+      applyUser(currentUser);
+      showToast('Naam opgeslagen.');
+    } catch (e) { showToast('Naam opslaan lukte niet.'); }
+  });
+  qs('[data-topbar-avatar]')?.addEventListener('click', () => navigate('more'));
+
   qs('[data-connect-google]')?.addEventListener('click', connectGoogle);
   qsa('[data-text-seg] button').forEach((b) => b.addEventListener('click', () => applyTextScale(b.dataset.textSize)));
   qsa('[data-lang-seg] button').forEach((b) => b.addEventListener('click', () => setLang(b.dataset.lang)));
